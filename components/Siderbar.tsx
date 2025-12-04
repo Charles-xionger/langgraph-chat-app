@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { PanelLeftClose, X, Plus, MessageSquare } from "lucide-react";
+import { PanelLeftClose, MessageSquare } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface SidebarProps {

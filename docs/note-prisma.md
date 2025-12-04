@@ -1,172 +1,218 @@
-# 使用 Prisma + PostgreSQL 替换 SQLite（完整教程）
+# 使用 Prisma + PostgreSQL 替换 SQLite
 
-当您的服务需要更高并发或希望使用托管数据库（例如在多实例部署场景下），可以用 PostgreSQL + Prisma 替换 SQLite。下面给出从依赖安装、Prisma schema、数据库初始化、迁移到示例代码的完整步骤。
+当服务需要更高并发、托管数据库支持或多实例部署时，建议把本地 SQLite 替换为 PostgreSQL，并使用 Prisma 作为 ORM。本文将把你当前项目的 LangGraph / checkpoint 场景与 Prisma 官方 Next.js 指南的要点整合在一起：依赖、schema、迁移、客户端单例、Next.js（App Router）示例页面、seed 与部署建议。
 
-## 步骤概览
+**概览**
 
-- 安装依赖：`prisma`、`@prisma/client`、`@langchain/langgraph-checkpoint-postgres`（可选：`pg`）
-- 初始化 Prisma、配置 `DATABASE_URL`
-- 定义并迁移 `Session` 模型（checkpoint 交给 PostgresSaver）
-- 创建 Prisma 客户端单例，适配 Next.js 热重载
-- 用 PostgresSaver 管理 LangGraph 的 checkpoint
-- 在 API 路由与 Server Component 中使用 Prisma（Node.js 运行时）
-- 调试与数据管理：Prisma Studio
+- 安装 Prisma 及驱动、初始化并配置 `prisma.config.ts`
+- 定义 `schema.prisma`（示例包含 `User`/`Post`）
+- 迁移、生成 Client、seed 数据
+- 在 Next.js (App Router) 中创建 `lib/prisma.ts` 单例，并在 Server Components / API 路由中使用
+- 为 LangGraph 使用 `@langchain/langgraph-checkpoint-postgres` 管理 checkpoint（可与 Prisma 并存）
+- 部署注意：Vercel 上需 `prisma generate`（`postinstall`）、避免 Turbopack 问题（特定 Next.js 版本）
 
 ---
 
-## 1. 安装依赖
+## 前置条件
+
+- Node.js 20+
+- 如果要在远端部署：Vercel 账号（或其他平台）
+
+## 1. 从 Next.js 示例开始（可选）
+
+如果你是从零开始搭建一个 Next.js + Prisma 示例项目，Prisma 的官方示例建议使用 `create-next-app`：
 
 ```bash
-pnpm add prisma @prisma/client @langchain/langgraph-checkpoint-postgres
-# 如需手动管理连接池或项目提示缺少驱动，再安装：
-# pnpm add pg
-npx prisma --version
+npx create-next-app@latest nextjs-prisma
+cd nextjs-prisma
 ```
 
-## 2. 启动 PostgreSQL（本地快速测试）
+（本项目使用 `pnpm`，下面示例也提供 `pnpm` 命令）
 
-建议使用 Docker 本地启动一个临时 Postgres 实例：
+## 2. 安装依赖
+
+推荐安装（开发依赖与运行时依赖）：
 
 ```bash
-docker run --name chat-postgres -e POSTGRES_PASSWORD=pass -e POSTGRES_USER=chatuser -e POSTGRES_DB=chat -p 5432:5432 -d postgres:15
+# 使用 pnpm
+pnpm add -D prisma tsx @types/pg
+pnpm add @prisma/client @prisma/adapter-pg dotenv pg
+
+# 或使用 npm
+npm install -D prisma tsx @types/pg
+npm install @prisma/client @prisma/adapter-pg dotenv pg
 ```
 
-然后在 `.env` 中配置 `DATABASE_URL`：
+说明：如果使用其他数据库（MySQL / SQLite / SQL Server），请安装对应驱动；这里示例使用 PostgreSQL。
 
-```env
-DATABASE_URL="postgresql://chatuser:pass@localhost:5432/chat"
-```
+## 3. 初始化 Prisma 并指定输出目录（Next.js app 路径示例）
 
-## 3. 初始化 Prisma
+官方 Next.js 指南建议在初始化时把 Prisma Client 的输出放到 `app/generated/prisma`（便于在 App Router 中导入）：
 
 ```bash
-npx prisma init
+npx prisma init --db --output ../app/generated/prisma
 ```
 
-在 Prisma 7 中，`schema.prisma` 的 datasource 不再写 `url`，连接字符串移动到 `prisma.config.ts`。首先在 `schema.prisma` 中设置 provider 并添加基本模型（仅 Session）：
+该命令会引导你创建一个托管 Postgres（如果你选择 Data Platform），并生成：`prisma/schema.prisma`、`.env`（包含 `DATABASE_URL`）、`prisma.config.ts` 等。
+
+## 4. 定义 Prisma Schema（示例）
+
+在 `prisma/schema.prisma` 中设置 `generator` 的 `output` 与 `datasource` provider（Prisma 7 的约定：datasource 不内嵌 `url`）：
 
 ```prisma
+generator client {
+  provider = "prisma-client-js"
+  output   = "../app/generated/prisma"
+}
+
 datasource db {
   provider = "postgresql"
 }
 
-generator client {
-  provider = "prisma-client-js"
+model User {
+  id    Int    @id @default(autoincrement())
+  email String @unique
+  name  String?
+  posts Post[]
 }
 
-model Session {
-  id         String   @id @default(cuid())
-  title      String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+model Post {
+  id        Int     @id @default(autoincrement())
+  title     String
+  content   String?
+  published Boolean @default(false)
+  authorId  Int
+  author    User    @relation(fields: [authorId], references: [id])
 }
-
-// LangGraph 的 checkpoint 使用 PostgresSaver 管理，无需在 Prisma 中定义对应表
 ```
 
-说明：LangGraph 的 checkpoint 将由 PostgresSaver 在 PostgreSQL 中自动创建与维护相关表，无需手动在 Prisma schema 中定义。
+如果你已有 `Session` 模型用于聊天会话，保留或合并至上面的 schema：
 
-接着修改 `prisma.config.ts` 配置连接串与迁移目录：
+```prisma
+model Session {
+  id        String   @id @default(cuid())
+  title     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+```
+
+## 5. 配置 `prisma.config.ts`（加载 `.env` 并设置 migrations/seed）
+
+示例 `prisma.config.ts`：
 
 ```ts
-// prisma.config.ts
 import "dotenv/config";
 import { defineConfig, env } from "prisma/config";
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
-  migrations: { path: "prisma/migrations" },
+  migrations: {
+    path: "prisma/migrations",
+    // 可在此指定 seed 脚本（示例）
+    seed: "tsx prisma/seed.ts",
+  },
   datasource: {
     url: env("DATABASE_URL"),
   },
 });
 ```
 
-## 4. 迁移并生成客户端
+## 6. 迁移、生成 Client、seed
+
+开发环境运行：
 
 ```bash
 npx prisma migrate dev --name init
 npx prisma generate
 ```
 
-> 生产环境建议使用 `npx prisma migrate deploy` 执行已存在的迁移；开发环境使用 `migrate dev`。
+写好 `prisma/seed.ts` 后可以运行 seed：
 
-## 5. 在代码中使用 Prisma（示例）
+```bash
+npx prisma db seed
+npx prisma studio
+```
 
-在 `app/agent/db.ts` 或类似模块中引入 `PrismaClient` 并实现基本的 CRUD 与 checkpoint 保存/读取示例：
+示例 `prisma/seed.ts`（使用生成的 client）
 
 ```ts
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "../app/generated/prisma/client";
+import "dotenv/config";
+
 const prisma = new PrismaClient();
 
-// 保存/更新会话元信息
-export async function upsertSession(id: string, data: { title: string }) {
-  return prisma.session.upsert({
-    where: { id },
-    update: { title: data.title },
-    create: { id, title: data.title },
+async function main() {
+  const alice = await prisma.user.create({
+    data: {
+      name: "Alice",
+      email: "alice@prisma.io",
+      posts: {
+        create: [
+          {
+            title: "Join the Prisma Discord",
+            content: "https://pris.ly/discord",
+            published: true,
+          },
+        ],
+      },
+    },
   });
+
+  const bob = await prisma.user.create({
+    data: { name: "Bob", email: "bob@prisma.io" },
+  });
+
+  console.log({ alice, bob });
 }
 
-// checkpoint 由 PostgresSaver 管理，无需手写保存/读取逻辑
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
 ```
 
-注意：LangGraph 通过 PostgresSaver 提供的 Checkpointer 实现自动管理保存/读取。
+注意：`prisma.config.ts` 中的 `seed` 字段可设置为上面的命令，这样 `npx prisma db seed` 会运行它。
 
----
+## 7. 在 Next.js 中创建 Prisma Client 单例（避免热重载重复连接）
 
-## 5.1 Next.js 集成要点（App Router）
-
-- 运行时：Prisma 仅支持 Node.js 运行时；不要在 Edge Runtime 中使用。
-- 单例化客户端：在开发热重载时复用单一 `PrismaClient`，避免连接爆炸。
-
-示例：在 `lib/prisma.ts` 建立单例（Prisma 7 需传入 adapter）
+在 `lib/prisma.ts` 中创建单例（Prisma 7 与 `@prisma/adapter-pg` 示例）：
 
 ```ts
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from '../app/generated/prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
-
-export const prisma =
-  globalForPrisma.prisma ||
-  new PrismaClient({ adapter, log: ["error", "warn"] });
-
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
-```
-
-在 API 路由使用（指定 Node.js 运行时）：
-
-```ts
-// app/api/users/route.ts
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-
-export const runtime = "nodejs";
-
-export async function GET() {
-  const users = await prisma.session.findMany();
-  return NextResponse.json(users);
+declare global {
+  // eslint-disable-next-line no-var
+  var __prisma?: PrismaClient
 }
+
+export const prisma = global.__prisma || new PrismaClient({ adapter })
+if (process.env.NODE_ENV !== 'production') global.__prisma = prisma
+
+export default prisma
 ```
 
-在 Server Component 使用：
+该模式在开发时将 Prisma Client 挂到全局，避免 HMR 时反复创建连接。
+
+## 8. 在 App Router 中使用 Prisma（Server Component / API 路由）
+
+示例：在 `app/page.tsx` 中直接查询用户（Server Component）
 
 ```tsx
-// app/users/page.tsx
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma";
 export const runtime = "nodejs";
 
-export default async function UsersPage() {
-  const sessions = await prisma.session.findMany();
+export default async function Home() {
+  const users = await prisma.user.findMany();
   return (
     <main>
-      <h1>Sessions</h1>
+      <h1>Users</h1>
       <ul>
-        {sessions.map((s) => (
-          <li key={s.id}>{s.title}</li>
+        {users.map((u) => (
+          <li key={u.id}>{u.name || u.email}</li>
         ))}
       </ul>
     </main>
@@ -174,132 +220,93 @@ export default async function UsersPage() {
 }
 ```
 
----
+示例 API 路由（`app/api/users/route.ts`）：
 
-## 5.2 使用 PostgresSaver 管理 LangGraph Checkpoint
+```ts
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
 
-安装并初始化 PostgresSaver：
+export const runtime = "nodejs";
+
+export async function GET() {
+  const users = await prisma.user.findMany();
+  return NextResponse.json(users);
+}
+```
+
+更多页面示例：`app/posts/page.tsx`、`app/posts/[id]/page.tsx`、`app/posts/new/page.tsx`（使用 `next/form` 的 server action）可参考 Prisma 官方 Next.js 指南的实现方式。
+
+## 9. LangGraph checkpoint：`@langchain/langgraph-checkpoint-postgres`
+
+如果你的项目使用 LangGraph 的 checkpoint，推荐使用 `@langchain/langgraph-checkpoint-postgres` 来把 checkpoint 存放在 Postgres：
 
 ```ts
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
-// 方式一：使用连接串（无需直接引入 pg）
+
+// 方式一：使用连接字符串
 const checkpointer = await PostgresSaver.fromConnString(
   process.env.DATABASE_URL!
 );
 await checkpointer.setup();
-```
 
-或使用连接池（可选）：
-
-```ts
+// 方式二：传入 pg Pool
 import { Pool } from "pg";
-import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const checkpointer = new PostgresSaver(pool);
-await checkpointer.setup();
+const checkpointer2 = new PostgresSaver(pool);
+await checkpointer2.setup();
+
+// 然后在 workflow / app 初始化中传入：
+// const app = workflow.compile({ checkpointer })
 ```
 
-在工作流编译中使用：
+注意：PostgresSaver 会在数据库中按需创建表结构，通常无需把 checkpoint 表写入 `schema.prisma`。如果你要使用 Prisma 操作相同表格，请确认表结构与 Prisma schema 的一致性。
 
-```ts
-const app = workflow.compile({ checkpointer });
+## 10. 部署与 Vercel 注意事项
+
+- 如果你的 `package.json` 的 `dev` 脚本使用 Turbopack（Next.js v15.2.0/v15.2.1 存在已知问题），在这些版本下请移除 `--turbopack` 标志：
+
+```json
+"scripts": {
+  "dev": "next dev",
+  "build": "next build",
+  "postinstall": "prisma generate",
+  "start": "next start"
+}
 ```
 
----
-
-## 5.3 调试与数据管理
-
-- 打开可视化管理界面：
-
-```bash
-npx prisma studio
-```
-
-- 校验与格式化：
-
-```bash
-npx prisma validate
-npx prisma format
-```
-
-## 6. 将项目配置改为使用 PostgreSQL
-
-- 把原来使用 `better-sqlite3` 的初始化逻辑替换为对 `prisma` 的调用（移除 `SqliteSaver` 依赖）。
-- 确保 `process.env.DATABASE_URL` 已在 `.env` 中配置，且 CI / 生产环境使用托管 Postgres 的连接字符串。
-
-示例：在 `workflow.compile` 或初始化代码处传入 PostgresSaver：
-
-```ts
-const app = workflow.compile({ checkpointer });
-```
-
----
-
-## 7. 其他建议
-
-- 性能与连接池：在高并发场景下，确保 Prisma 的连接池配置（Postgres 端）合适，并在服务端复用单一的 `PrismaClient` 实例。
-- 迁移数据：若要把现有的 SQLite 数据迁移到 Postgres，可导出 SQLite 中的 `sessions` 与 checkpoint JSON，然后用脚本批量导入到 Postgres（通过 Prisma 或直接 SQL）。
-- 备份与运维：生产环境建议使用托管 Postgres（如 AWS RDS / Railway / Supabase 等），并配置定期备份与监控。
-- LangGraph 的 checkpoint 管理：推荐使用 `@langchain/langgraph-checkpoint-postgres` 搭配 `pg`，由 PostgresSaver 统一管理到 PostgreSQL；如保留 SQLite，可继续使用 `@langchain/langgraph-checkpoint-sqlite`。
-
-— 若使用 Prisma 7：
-
-- 在 `schema.prisma` 的 datasource 区块仅保留 `provider`，不要写 `url`
-- 在 `prisma.config.ts` 写 `datasource.url = env('DATABASE_URL')`
-- 在应用代码实例化 `PrismaClient` 时传入适配器（PostgreSQL 使用 `@prisma/adapter-pg`）
-
----
-
-## 8. 生产部署与依赖调整
-
-- 依赖清理：迁移完成后移除 SQLite 相关依赖与代码路径。
-
-```bash
-pnpm remove better-sqlite3 @langchain/langgraph-checkpoint-sqlite
-```
-
-- 部署数据库迁移：在 CI/部署时运行：
+- 在部署（例如 Vercel）时，确保 `prisma generate` 在构建或 `postinstall` 阶段执行，以便 Prisma Client 可被正确打包。
+- 在 CI/生产运行迁移时使用：
 
 ```bash
 npx prisma migrate deploy
 ```
 
-- 环境变量：在生产平台安全配置 `DATABASE_URL`，避免将连接串写入代码。
+## 11. 迁移 SQLite 数据到 Postgres（思路）
 
----
+如果你要从 SQLite（`better-sqlite3`）迁移历史数据到 Postgres：
 
-## 9. 从 SQLite 迁移到 PostgreSQL（示例脚本思路）
+- 导出 SQLite 的表数据（JSON 或 CSV）。
+- 用脚本（Node.js + Prisma）逐条写入 Postgres（`upsert` 可避免重复）。
 
-如需迁移历史数据，可以编写一个脚本：从 `better-sqlite3` 读取，再用 Prisma 写入 Postgres。
+示例思路（伪代码）：
 
 ```ts
-// pseudo-script.ts
 import Database from "better-sqlite3";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "../app/generated/prisma/client";
+const db = new Database("./chat_history.db");
 const prisma = new PrismaClient();
-const db = new Database(process.env.CHAT_DB_PATH || "chat_history.db");
 
-// 读取 sessions 表
-const rows = db.prepare("SELECT id, title FROM sessions").all();
-for (const r of rows) {
+const sessions = db.prepare("SELECT id, title, created_at FROM sessions").all();
+for (const s of sessions) {
   await prisma.session.upsert({
-    where: { id: r.id },
-    update: { title: r.title },
-    create: { id: r.id, title: r.title },
-  });
-}
-
-// 读取并写入 checkpoints（按项目实际表结构）
-const ckpts = db.prepare("SELECT id, data FROM checkpoints").all();
-for (const c of ckpts) {
-  await prisma.checkpoint.upsert({
-    where: { id: c.id },
-    update: { data: JSON.parse(c.data) },
-    create: { id: c.id, data: JSON.parse(c.data) },
+    where: { id: s.id },
+    update: { title: s.title },
+    create: { id: s.id, title: s.title },
   });
 }
 ```
 
-脚本仅为思路示例，请按项目实际的 SQLite 表结构调整字段名与序列化逻辑。
+## 12. 调试与工具
 
-如果你希望我把上述示例代码直接合并到 `app/agent/db.ts`（按项目目前代码风格实现），我可以继续为你实现并运行一次本地迁移示例。
+- 打开 Prisma Studio：`npx prisma studio`
+- 格式与校验：`npx prisma format`、`npx prisma validate`
