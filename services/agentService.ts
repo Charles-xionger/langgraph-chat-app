@@ -1,7 +1,9 @@
 import type { MessageOptions, MessageResponse } from "@/types/message";
 import { ensureThread } from "@/lib/thread";
-import { HumanMessage } from "langchain";
+import { BaseMessage, HumanMessage } from "langchain";
 import { ensureAgent } from "@/lib/agent";
+import prisma from "@/lib/database/pirsma";
+import { getHistory } from "@/lib/agent/memory";
 
 export async function streamResponse(params: {
   threadId: string;
@@ -22,7 +24,7 @@ export async function streamResponse(params: {
   const agent = await ensureAgent();
 
   const inerable = await agent.stream(inputs, {
-    streamMode: ["updates"], // 启用流式更新
+    streamMode: "messages", // 使用 messages 模式获取流式 token
     configurable: { thread_id: threadId },
   });
 
@@ -37,52 +39,23 @@ export async function streamResponse(params: {
       // 调试信息：打印原始 chunk 负载，便于排查流式行为
       console.log("🚀 ~ generator ~ chunk:", chunk);
 
-      // LangGraph 返回的 chunk 通常为二元元组形式：[type, data]
-      if (!Array.isArray(chunk) || chunk.length !== 2) continue;
+      // streamMode: "messages" 返回的是 [message, metadata] 格式
+      if (!Array.isArray(chunk) || chunk.length < 1) continue;
 
-      const [chunkType, chunkData] = chunk;
+      const [message, metadata] = chunk;
 
-      if (
-        chunkType !== "updates" ||
-        !chunkData ||
-        typeof chunkData !== "object"
-      )
-        continue;
+      // 只处理 AI 消息的增量内容
+      const isAIMessageChunk =
+        message?.constructor?.name === "AIMessageChunk" ||
+        message?.constructor?.name === "AIMessage";
 
-      // 仅处理类型为 "updates" 的数据块
+      if (!isAIMessageChunk) continue;
 
-      // TODO __internal__ 需要根据实际返回的 chunkData 结构进行调整
+      const processedMessage = processAIMessage(message);
 
-      // 处理 agent 更新消息 （如 AI 消息、工具调用等）
-      if (
-        "agent" in chunkData &&
-        chunkData.agent &&
-        typeof chunkData.agent === "object" &&
-        "messages" in chunkData.agent
-      ) {
-        const messages = Array.isArray(chunkData.agent.messages)
-          ? chunkData.agent.messages
-          : [chunkData.agent.messages];
-
-        for (const message of messages) {
-          if (!message) continue;
-
-          // 仅处理实际的 AI 消息（可能是分块的 AIMessageChunk 或最终的 AIMessage 实例）
-          const isAIMessage =
-            message?.constructor?.name === "AIMessageChunk" ||
-            message?.constructor?.name === "AIMessage";
-
-          if (!isAIMessage) continue;
-
-          const processedMessage = processAIMessage(
-            message as Record<string, unknown>
-          );
-
-          if (processedMessage) {
-            // 将处理后的消息作为生成器输出
-            yield processedMessage;
-          }
-        }
+      if (processedMessage) {
+        // 将处理后的消息作为生成器输出
+        yield processedMessage;
       }
     }
   }
@@ -97,9 +70,7 @@ export async function streamResponse(params: {
 }
 
 // 辅助函数：处理任意 AI 消息并返回适当的 MessageResponse
-function processAIMessage(
-  message: Record<string, unknown>
-): MessageResponse | null {
+function processAIMessage(message: BaseMessage): MessageResponse | null {
   // TODO  tookl_calls 以及其他字段的处理逻辑
 
   // 非 工具的 AI 消息处理： 提取可读文本。不同的 LLM/运行时可能将文本表示为字符串或
@@ -136,4 +107,18 @@ function processAIMessage(
   }
   // 如果没有有意义的内容可返回，就标记为null，以便调用者忽略它。
   return null;
+}
+
+export async function fetchThreadHistory(
+  threadId: string
+): Promise<MessageResponse[]> {
+  const thread = await prisma.thread.findUnique({ where: { id: threadId } });
+  if (!thread) return [];
+  try {
+    const history = await getHistory(threadId);
+    return history.map((msg: BaseMessage) => msg.toDict() as MessageResponse);
+  } catch (e) {
+    console.error("fetchThreadHistory error", e);
+    return [];
+  }
 }
