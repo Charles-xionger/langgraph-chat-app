@@ -1,8 +1,10 @@
 import { AgentConfigOptions } from "@/types/agent";
 import { postgresCheckpointer } from "./memory";
 import { AgentBuilder } from "./builder";
-import { ChatOpenAI } from "@langchain/openai";
+import { ChatOpenAI, OpenAIEmbeddings } from "@langchain/openai";
 import { SYSTEM_PROMPT } from "./prompt";
+import { getInternalTools } from "./tools";
+import { DynamicTool } from "langchain";
 
 // 用来标记是否已经开始设置
 let setupPromise: Promise<void> | null = null;
@@ -29,8 +31,14 @@ async function setupOnce() {
  */
 function createChatModel() {
   return new ChatOpenAI({
-    modelName: "gpt-3.5-turbo",
+    modelName: "gpt-4.1",
     temperature: 0,
+  });
+}
+
+function createEmbeddingsModel() {
+  return new OpenAIEmbeddings({
+    model: "text-embedding-3-small",
   });
 }
 
@@ -42,9 +50,21 @@ function createChatModel() {
  */
 
 export async function createAgent(config?: AgentConfigOptions) {
+  // TODO MCP Tools
+  const mcptools: DynamicTool[] = [];
+
+  // 内置工具
+  const internalTools = getInternalTools(
+    createChatModel(),
+    createEmbeddingsModel()
+  );
+
+  const allTools = [...internalTools, ...mcptools] as DynamicTool[];
+
   const llm = createChatModel();
   const agent = new AgentBuilder({
     llm,
+    tools: allTools,
     prompt: config?.systemPrompt || SYSTEM_PROMPT,
     checkpointer: postgresCheckpointer,
   }).build();

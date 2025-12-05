@@ -61,10 +61,25 @@ export function useStreamedMessages(threadId?: string) {
             // 一旦收到第一个消息，标记为正在接收
             setIsReceiving(true);
 
+            // 工具执行结果消息 (type: "tool") 直接追加，不累积
+            if (messageResponse.type === "tool") {
+              queryClient.setQueryData(
+                ["messages", tid],
+                (old: MessageResponse[] = []) => [...old, messageResponse]
+              );
+              return;
+            }
+
+            // AI 消息带有 tool_calls 且无文本内容，表示工具调用请求
+            // 这种情况下，我们需要更新现有消息或新增
+            const hasToolCalls = data.tool_calls && data.tool_calls.length > 0;
+            const hasContent = data.content && data.content.trim();
+
             if (
               !currentMessageRef.current ||
               currentMessageRef.current.data.id !== data.id
             ) {
+              // 新消息
               currentMessageRef.current = messageResponse;
               queryClient.setQueryData(
                 ["messages", tid],
@@ -74,20 +89,29 @@ export function useStreamedMessages(threadId?: string) {
                 ]
               );
             } else {
-              // 处理 tool_call_chunks 或内容追加
+              // 累积现有消息
               const currentData: any = currentMessageRef.current.data;
-              const newContent =
-                typeof data.content === "string" &&
-                typeof currentData.content === "string"
-                  ? currentData.content + data.content
-                  : data.content;
+
+              // 文本内容累积
+              let newContent = currentData.content || "";
+              if (typeof data.content === "string" && data.content) {
+                newContent =
+                  typeof currentData.content === "string"
+                    ? currentData.content + data.content
+                    : data.content;
+              }
+
+              // 工具调用：直接替换（后端会发送完整的 tool_calls）
+              const newToolCalls = hasToolCalls
+                ? data.tool_calls
+                : currentData.tool_calls;
 
               currentMessageRef.current = {
                 ...currentMessageRef.current,
                 data: {
                   ...currentData,
                   content: newContent,
-                  ...(data.tool_calls && { tool_calls: data.tool_calls }),
+                  ...(newToolCalls && { tool_calls: newToolCalls }),
                   ...(data.additional_kwargs && {
                     additional_kwargs: data.additional_kwargs,
                   }),

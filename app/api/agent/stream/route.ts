@@ -17,13 +17,24 @@ export async function GET(request: NextRequest) {
   // 1. 定义编码器，用于将字符串转换为 Uint8Array
   const encoder = new TextEncoder();
 
+  // 用于中断流的控制器
+  const abortController = new AbortController();
+  let isAborted = false;
+
   // 2. 创建一个可读流
   const stream = new ReadableStream<Uint8Array>({
     // 当流开始时调用
     start(controller) {
       // 定义发送数据的辅助函数
       const send = (data: MessageResponse) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        if (isAborted) return;
+        try {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
+          );
+        } catch {
+          // 流已关闭，忽略
+        }
       };
 
       // Initial comment to establish stream
@@ -40,35 +51,48 @@ export async function GET(request: NextRequest) {
           });
 
           for await (const chunk of iterable) {
+            // 检查是否已中断
+            if (isAborted || abortController.signal.aborted) {
+              break;
+            }
             // 仅发送类型为 "ai" 或 "tool" 的消息块
             if (chunk.type === "ai" || chunk.type === "tool") {
               send(chunk);
             }
           }
 
-          // 流结束时发送一个特殊的结束信号
-          controller.enqueue(encoder.encode("event: done\n"));
-          controller.enqueue(encoder.encode("data: {}\n\n"));
+          if (!isAborted) {
+            // 流结束时发送一个特殊的结束信号
+            controller.enqueue(encoder.encode("event: done\n"));
+            controller.enqueue(encoder.encode("data: {}\n\n"));
+          }
         } catch (error) {
-          controller.enqueue(encoder.encode("event: error\n"));
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                message:
-                  error instanceof Error ? error.message : "Unknown error",
-                threadId,
-              })}\n\n`
-            )
-          );
+          if (!isAborted) {
+            controller.enqueue(encoder.encode("event: error\n"));
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  message:
+                    error instanceof Error ? error.message : "Unknown error",
+                  threadId,
+                })}\n\n`
+              )
+            );
+          }
         } finally {
-          controller.close();
+          try {
+            controller.close();
+          } catch {
+            // 流已关闭，忽略
+          }
         }
       })();
     },
 
-    // 当流关闭时调用
+    // 当客户端断开连接时调用
     cancel() {
-      // 如果客户端断开连接，目前没有什么特别的处理（LangGraph 流会随着迭代停止而终止）
+      isAborted = true;
+      abortController.abort();
     },
   });
 
@@ -98,13 +122,24 @@ export async function POST(request: NextRequest) {
   // 1. 定义编码器，用于将字符串转换为 Uint8Array
   const encoder = new TextEncoder();
 
+  // 用于中断流的控制器
+  const abortController = new AbortController();
+  let isAborted = false;
+
   // 2. 创建一个可读流
   const stream = new ReadableStream<Uint8Array>({
     // 当流开始时调用
     start(controller) {
       // 定义发送数据的辅助函数
       const send = (data: MessageResponse) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        if (isAborted) return;
+        try {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
+          );
+        } catch {
+          // 流已关闭，忽略
+        }
       };
 
       // Initial comment to establish stream
@@ -121,35 +156,48 @@ export async function POST(request: NextRequest) {
           });
 
           for await (const chunk of iterable) {
+            // 检查是否已中断
+            if (isAborted || abortController.signal.aborted) {
+              break;
+            }
             // 仅发送类型为 "ai" 或 "tool" 的消息块
             if (chunk.type === "ai" || chunk.type === "tool") {
               send(chunk);
             }
           }
 
-          // 流结束时发送一个特殊的结束信号
-          controller.enqueue(encoder.encode("event: done\n"));
-          controller.enqueue(encoder.encode("data: {}\n\n"));
+          if (!isAborted) {
+            // 流结束时发送一个特殊的结束信号
+            controller.enqueue(encoder.encode("event: done\n"));
+            controller.enqueue(encoder.encode("data: {}\n\n"));
+          }
         } catch (error) {
-          controller.enqueue(encoder.encode("event: error\n"));
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                message:
-                  error instanceof Error ? error.message : "Unknown error",
-                threadId,
-              })}\n\n`
-            )
-          );
+          if (!isAborted) {
+            controller.enqueue(encoder.encode("event: error\n"));
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  message:
+                    error instanceof Error ? error.message : "Unknown error",
+                  threadId,
+                })}\n\n`
+              )
+            );
+          }
         } finally {
-          controller.close();
+          try {
+            controller.close();
+          } catch {
+            // 流已关闭，忽略
+          }
         }
       })();
     },
 
-    // 当流关闭时调用
+    // 当客户端断开连接时调用
     cancel() {
-      // 如果客户端断开连接，目前没有什么特别的处理（LangGraph 流会随着迭代停止而终止）
+      isAborted = true;
+      abortController.abort();
     },
   });
 

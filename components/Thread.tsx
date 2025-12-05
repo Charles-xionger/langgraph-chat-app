@@ -20,7 +20,8 @@ export const Thread = ({ threadId, onFirstMessageSent }: IThreadProps) => {
   const { data: messages, isLoading: isLoadingHistory } =
     useHistoryMessages(threadId);
 
-  const { isSending, isReceiving, sendMessage } = useStreamedMessages(threadId);
+  const { isSending, isReceiving, sendMessage, cancel } =
+    useStreamedMessages(threadId);
 
   // 处理发送消息的逻辑
   const handleSendMessage = async (message: string, opts?: MessageOptions) => {
@@ -76,7 +77,9 @@ export const Thread = ({ threadId, onFirstMessageSent }: IThreadProps) => {
       <div className="shrink-0 border-t">
         <MessageInput
           onSend={handleSendMessage}
-          disabled={isSending}
+          onCancel={cancel}
+          disabled={isSending && !isReceiving}
+          isStreaming={isReceiving}
           placeholder="Send a message..."
         />
       </div>

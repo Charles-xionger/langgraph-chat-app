@@ -1,9 +1,30 @@
-import type { MessageOptions, MessageResponse } from "@/types/message";
+import type {
+  MessageOptions,
+  MessageResponse,
+  ToolCall,
+} from "@/types/message";
 import { ensureThread } from "@/lib/thread";
 import { BaseMessage, HumanMessage } from "langchain";
 import { ensureAgent } from "@/lib/agent";
 import prisma from "@/lib/database/pirsma";
 import { getHistory } from "@/lib/agent/memory";
+
+// LangChain 流式消息的扩展类型
+interface AIMessageChunkLike extends BaseMessage {
+  tool_calls?: ToolCall[];
+  tool_call_chunks?: Array<{
+    index?: number;
+    id?: string;
+    name?: string;
+    args?: string;
+    type?: string;
+  }>;
+}
+
+interface ToolMessageLike extends BaseMessage {
+  tool_call_id?: string;
+  name?: string;
+}
 
 export async function streamResponse(params: {
   threadId: string;
@@ -25,6 +46,7 @@ export async function streamResponse(params: {
 
   const inerable = await agent.stream(inputs, {
     streamMode: "messages", // 使用 messages 模式获取流式 token
+    // streamMode: "updates", // 使用 updates 模式获取流式更新
     configurable: { thread_id: threadId },
   });
 
@@ -32,11 +54,46 @@ export async function streamResponse(params: {
   // 元组转换为项目所需的 `MessageResponse` 结构。
 
   async function* generator(): AsyncGenerator<MessageResponse, void, unknown> {
+    // 用于累积工具调用片段，key 是 tool_call 的 index
+    const toolCallAccumulators: Map<
+      number,
+      { id: string; name: string; args: string }
+    > = new Map();
+
+    // 当前正在处理的 AI 消息 ID（用于关联工具调用和文本）
+    let currentAIMessageId: string | null = null;
+
+    // 文本内容缓冲区（用于处理不完整的代码块）
+    let contentBuffer = "";
+    // 上次发送的位置
+    let lastSentIndex = 0;
+
+    // 检查代码块是否完整的辅助函数
+    function findSafeBreakPoint(text: string): number {
+      // 计算未闭合的代码块数量
+      const codeBlockPattern = /```/g;
+      let count = 0;
+      let lastIndex = 0;
+      let match;
+
+      while ((match = codeBlockPattern.exec(text)) !== null) {
+        count++;
+        lastIndex = match.index;
+      }
+
+      // 如果代码块数量为奇数，说明有未闭合的代码块
+      if (count % 2 === 1) {
+        // 找到最后一个 ``` 的位置，在它之前截断
+        return lastIndex;
+      }
+
+      // 所有代码块都已闭合，可以安全发送全部内容
+      return text.length;
+    }
+
     for await (const chunk of inerable) {
-      // chunk 不存在 跳过继续
       if (!chunk) continue;
 
-      // 调试信息：打印原始 chunk 负载，便于排查流式行为
       console.log("🚀 ~ generator ~ chunk:", chunk);
 
       // streamMode: "messages" 返回的是 [message, metadata] 格式
@@ -44,20 +101,185 @@ export async function streamResponse(params: {
 
       const [message, metadata] = chunk;
 
-      // 只处理 AI 消息的增量内容
+      // 处理 ToolMessage（工具执行结果）
+      if (
+        message?.constructor?.name === "ToolMessage" ||
+        message?.constructor?.name === "ToolMessageChunk"
+      ) {
+        const toolMsg = message as ToolMessageLike;
+        yield {
+          type: "tool",
+          data: {
+            id: toolMsg.id || Date.now().toString(),
+            content:
+              typeof toolMsg.content === "string"
+                ? toolMsg.content
+                : JSON.stringify(toolMsg.content),
+            status: "success",
+            tool_call_id: toolMsg.tool_call_id || "",
+            name: toolMsg.name || "",
+          },
+        };
+        continue;
+      }
+
+      // 只处理 AI 消息
       const isAIMessageChunk =
         message?.constructor?.name === "AIMessageChunk" ||
         message?.constructor?.name === "AIMessage";
 
       if (!isAIMessageChunk) continue;
 
-      const processedMessage = processAIMessage(message);
+      // 类型断言为 AIMessageChunkLike
+      const aiMessage = message as AIMessageChunkLike;
 
-      if (processedMessage) {
-        // 将处理后的消息作为生成器输出
-        yield processedMessage;
+      // 更新当前消息 ID
+      if (aiMessage.id && aiMessage.id !== currentAIMessageId) {
+        // 新消息开始前，先发送之前累积的工具调用
+        if (toolCallAccumulators.size > 0 && currentAIMessageId) {
+          const completedToolCalls =
+            buildCompletedToolCalls(toolCallAccumulators);
+          yield {
+            type: "ai",
+            data: {
+              id: currentAIMessageId,
+              content: "",
+              tool_calls: completedToolCalls,
+            },
+          };
+          toolCallAccumulators.clear();
+        }
+        currentAIMessageId = aiMessage.id;
+      }
+
+      // 处理工具调用片段 (tool_call_chunks)
+      const toolCallChunks = aiMessage.tool_call_chunks;
+      if (toolCallChunks && toolCallChunks.length > 0) {
+        for (const tchunk of toolCallChunks) {
+          const { index, id, name, args } = tchunk;
+          const idx = index ?? 0;
+
+          if (!toolCallAccumulators.has(idx)) {
+            toolCallAccumulators.set(idx, {
+              id: id || "",
+              name: name || "",
+              args: args || "",
+            });
+          } else {
+            const acc = toolCallAccumulators.get(idx)!;
+            if (id) acc.id = id;
+            if (name) acc.name += name;
+            acc.args += args || "";
+          }
+        }
+        // 不在这里 yield，等累积完成后再发送
+        continue;
+      }
+
+      // 检查是否有完整的工具调用 (非流式情况)
+      const toolCalls = aiMessage.tool_calls;
+      if (toolCalls && toolCalls.length > 0) {
+        yield {
+          type: "ai",
+          data: {
+            id: aiMessage.id || Date.now().toString(),
+            content: "",
+            tool_calls: toolCalls,
+          },
+        };
+        continue;
+      }
+
+      // 处理普通文本内容 - 使用缓冲区确保代码块完整
+      const chunkContent = extractContent(aiMessage);
+      if (chunkContent) {
+        contentBuffer += chunkContent;
+
+        // 找到安全的断点位置
+        const safeBreakPoint = findSafeBreakPoint(contentBuffer);
+
+        // 如果有可以安全发送的内容
+        if (safeBreakPoint > lastSentIndex) {
+          const contentToSend = contentBuffer.substring(
+            lastSentIndex,
+            safeBreakPoint
+          );
+          if (contentToSend.trim()) {
+            yield {
+              type: "ai",
+              data: {
+                id: currentAIMessageId || Date.now().toString(),
+                content: contentToSend,
+              },
+            };
+          }
+          lastSentIndex = safeBreakPoint;
+        }
       }
     }
+
+    // 流结束后，发送缓冲区中剩余的内容
+    if (contentBuffer.length > lastSentIndex) {
+      const remainingContent = contentBuffer.substring(lastSentIndex);
+      if (remainingContent.trim()) {
+        yield {
+          type: "ai",
+          data: {
+            id: currentAIMessageId || Date.now().toString(),
+            content: remainingContent,
+          },
+        };
+      }
+    }
+
+    // 流结束后，发送最后累积的工具调用（如果有）
+    if (toolCallAccumulators.size > 0) {
+      const completedToolCalls = buildCompletedToolCalls(toolCallAccumulators);
+      yield {
+        type: "ai",
+        data: {
+          id: currentAIMessageId || Date.now().toString(),
+          content: "",
+          tool_calls: completedToolCalls,
+        },
+      };
+    }
+  }
+
+  // 辅助函数：构建完整的工具调用数组
+  function buildCompletedToolCalls(
+    accumulators: Map<number, { id: string; name: string; args: string }>
+  ) {
+    return Array.from(accumulators.values()).map((acc) => {
+      let parsedArgs: Record<string, unknown> = {};
+      try {
+        parsedArgs = JSON.parse(acc.args);
+      } catch {
+        parsedArgs = { raw: acc.args };
+      }
+      return {
+        id: acc.id,
+        name: acc.name,
+        args: parsedArgs,
+        type: "tool_call" as const,
+      };
+    });
+  }
+
+  // 辅助函数：从消息中提取文本内容
+  function extractContent(message: BaseMessage): string {
+    if (typeof message.content === "string") {
+      return message.content;
+    } else if (Array.isArray(message.content)) {
+      return message.content
+        .map((item) =>
+          item && typeof item === "object" && "text" in item
+            ? String(item.text)
+            : ""
+        )
+        .join("");
+    }
+    return String(message.content || "");
   }
 
   // question 为什么使用 generator 函数处理，而不是直接返回 iterable？

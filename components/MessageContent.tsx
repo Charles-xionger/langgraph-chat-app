@@ -59,12 +59,14 @@ export const MessageContent = ({ message }: MessageContentProps) => {
         remarkPlugins={[remarkGfm]}
         components={{
           code: (props) => {
-            const { className, children, ...rest } = props;
-            // @ts-ignore
-            const inline = props.inline;
+            const { className, children, node, ...rest } = props;
             const match = /language-(\w+)/.exec(className || "");
             const language = match ? match[1].toLowerCase() : "";
             const code = String(children).replace(/\n$/, "");
+
+            // 判断是否为行内代码：没有语言标识且不包含换行符
+            const isInline = !className && !code.includes("\n");
+
             const codeId = `${message.data.id}-${language}-${code.substring(
               0,
               20
@@ -82,7 +84,20 @@ export const MessageContent = ({ message }: MessageContentProps) => {
 
             const normalizedLanguage = languageMap[language] || language;
 
-            return !inline ? (
+            // 行内代码样式
+            if (isInline) {
+              return (
+                <code
+                  className="rounded-md bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-sm font-mono text-pink-600 dark:text-pink-400 before:content-[''] after:content-['']"
+                  {...rest}
+                >
+                  {children}
+                </code>
+              );
+            }
+
+            // 代码块样式
+            return (
               <div
                 className="my-4 rounded-lg border border-border overflow-hidden"
                 style={{ backgroundColor: currentTheme.bg }}
@@ -131,13 +146,6 @@ export const MessageContent = ({ message }: MessageContentProps) => {
                   {code}
                 </SyntaxHighlighter>
               </div>
-            ) : (
-              <code
-                className="rounded bg-muted px-1.5 py-0.5 text-sm font-mono before:content-[''] after:content-['']"
-                {...rest}
-              >
-                {children}
-              </code>
             );
           },
           pre: ({ children }) => <>{children}</>,
@@ -166,14 +174,12 @@ export const MessageContent = ({ message }: MessageContentProps) => {
           ),
           li: ({ children }) => <li>{children}</li>,
           p: ({ children }) => (
-            <div className="my-3 leading-7 first:mt-0 last:mb-0">
-              {children}
-            </div>
+            <p className="my-3 leading-7 first:mt-0 last:mb-0">{children}</p>
           ),
           a: ({ href, children }) => (
             <a
               href={href}
-              className="text-primary underline underline-offset-4 hover:text-primary/80"
+              className="text-current opacity-80 underline underline-offset-4 hover:opacity-100 contrast-more:text-current"
               target="_blank"
               rel="noopener noreferrer"
             >
