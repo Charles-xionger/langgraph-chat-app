@@ -1,3 +1,6 @@
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
 import { streamResponse } from "@/services/agentService";
 import { MessageResponse } from "@/types/message";
 import { NextRequest, NextResponse } from "next/server";

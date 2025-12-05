@@ -84,5 +84,12 @@ export async function getAgent(config?: AgentConfigOptions) {
   return ensureAgent(config);
 }
 
-// 在模块加载时立即创建一个默认的 Agent 实例，使用环境变量中的默认配置
-export const defaultAgent = await ensureAgent();
+// 移除顶层 await，改为懒加载
+let cachedAgent: Awaited<ReturnType<typeof ensureAgent>> | null = null;
+
+export async function getDefaultAgent() {
+  if (!cachedAgent) {
+    cachedAgent = await ensureAgent();
+  }
+  return cachedAgent;
+}
