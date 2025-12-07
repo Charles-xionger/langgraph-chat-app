@@ -5,7 +5,7 @@ import {
   MessageResponse,
   ToolMessageData,
 } from "@/types/message";
-import { Bot, User, Wrench } from "lucide-react";
+import { Bot, User, Wrench, Square } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { ScrollArea } from "./ui/scroll-area";
 import { MessageContent } from "./MessageContent";
@@ -34,15 +34,20 @@ function hasDisplayableContent(
 
 interface MessageListProps {
   messages: MessageResponse[];
-  isLoading?: boolean;
+  isThinking?: boolean;
+  onCancelThinking?: () => void;
 }
 
-export const MessageList = ({ messages, isLoading }: MessageListProps) => {
+export const MessageList = ({
+  messages,
+  isThinking,
+  onCancelThinking,
+}: MessageListProps) => {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, isThinking]);
 
   // 收集所有已完成的工具调用 ID（tool_call_id）
   const toolResultIds = useMemo(() => {
@@ -63,9 +68,16 @@ export const MessageList = ({ messages, isLoading }: MessageListProps) => {
       <div className="mx-auto max-w-3xl space-y-4 p-4">
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-center">
-            <div className="space-y-2">
-              <Bot className="mx-auto h-12 w-12 text-muted-foreground" />
-              <p className="text-muted-foreground">
+            <div className="space-y-3">
+              <div className="mx-auto relative">
+                <div className="w-16 h-18 bg-[#5DCC52] rounded-t-full relative mx-auto">
+                  <div className="absolute top-5 left-3 w-3 h-3 bg-[#421808] rounded-full" />
+                  <div className="absolute top-5 right-3 w-3 h-3 bg-[#421808] rounded-full" />
+                  <div className="absolute -top-2 left-3 w-2 h-4 bg-[#3da83d] rounded-full transform -rotate-12" />
+                  <div className="absolute -top-2 right-3 w-2 h-4 bg-[#3da83d] rounded-full transform rotate-12" />
+                </div>
+              </div>
+              <p className="text-[#A05030] pixel-text-sm">
                 Start a conversation by sending a message
               </p>
             </div>
@@ -96,25 +108,25 @@ export const MessageList = ({ messages, isLoading }: MessageListProps) => {
                   }`}
                 >
                   {message.type !== "human" && (
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                      {message.type === "tool" ||
-                      (hasPendingToolCalls && !hasContent) ? (
-                        <Wrench className="h-4 w-4" />
-                      ) : (
-                        <Bot className="h-4 w-4" />
-                      )}
+                    <div className="mt-0.5 relative">
+                      <div className="w-8 h-9 bg-[#5DCC52] rounded-t-full relative">
+                        <div className="absolute top-2.5 left-1.5 w-1.5 h-1.5 bg-[#421808] rounded-full" />
+                        <div className="absolute top-2.5 right-1.5 w-1.5 h-1.5 bg-[#421808] rounded-full" />
+                        <div className="absolute -top-1 left-1.5 w-1 h-2 bg-[#3da83d] rounded-full transform -rotate-12" />
+                        <div className="absolute -top-1 right-1.5 w-1 h-2 bg-[#3da83d] rounded-full transform rotate-12" />
+                      </div>
                     </div>
                   )}
                   <div
-                    className={`max-w-[80%] rounded-lg ${
+                    className={`max-w-[80%] px-4 py-3 text-sm ${
                       message.type === "human"
-                        ? "bg-primary text-primary-foreground px-4 py-2"
+                        ? "stardew-btn rounded-tl-xl rounded-tr-xl rounded-bl-xl rounded-br-sm"
                         : message.type === "error"
-                        ? "bg-destructive text-destructive-foreground px-4 py-2"
+                        ? "bg-destructive text-destructive-foreground rounded-lg"
                         : message.type === "tool" ||
                           (hasPendingToolCalls && !hasContent)
                         ? "" // 工具卡片自带样式，不需要额外背景
-                        : "bg-muted px-4 py-2"
+                        : "inventory-slot rounded-tl-xl rounded-tr-xl rounded-bl-sm rounded-br-xl text-[#451806]"
                     }`}
                   >
                     {message.type === "tool" ? (
@@ -138,23 +150,41 @@ export const MessageList = ({ messages, isLoading }: MessageListProps) => {
                     )}
                   </div>
                   {message.type === "human" && (
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground">
-                      <User className="h-4 w-4" />
+                    <div className="mt-0.5 grid h-8 w-8 place-items-center rounded-full bg-[#4A90D9] text-[10px] font-bold text-white border-2 border-[#552814]">
+                      FE
                     </div>
                   )}
                 </div>
               );
             })
         )}
-        {isLoading && (
+        {isThinking && (
           <div className="flex gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <Bot className="h-4 w-4" />
+            <div className="mt-0.5 relative">
+              <div className="w-8 h-9 bg-[#5DCC52] rounded-t-full relative">
+                <div className="absolute top-2.5 left-1.5 w-1.5 h-1.5 bg-[#421808] rounded-full" />
+                <div className="absolute top-2.5 right-1.5 w-1.5 h-1.5 bg-[#421808] rounded-full" />
+                <div className="absolute -top-1 left-1.5 w-1 h-2 bg-[#3da83d] rounded-full transform -rotate-12" />
+                <div className="absolute -top-1 right-1.5 w-1 h-2 bg-[#3da83d] rounded-full transform rotate-12" />
+              </div>
             </div>
-            <div className="flex items-center gap-1 rounded-lg bg-muted px-4 py-2">
-              <div className="h-2 w-2 animate-bounce rounded-full bg-foreground/60 [animation-delay:-0.3s]"></div>
-              <div className="h-2 w-2 animate-bounce rounded-full bg-foreground/60 [animation-delay:-0.15s]"></div>
-              <div className="h-2 w-2 animate-bounce rounded-full bg-foreground/60"></div>
+            <div className="flex items-center gap-3 inventory-slot rounded-lg px-4 py-2">
+              <div className="flex items-center gap-1">
+                <div className="h-2.5 w-2.5 junimo-bounce rounded-full bg-[#5DCC52] [animation-delay:-0.3s]"></div>
+                <div className="h-2.5 w-2.5 junimo-bounce rounded-full bg-[#FFD700] [animation-delay:-0.15s]"></div>
+                <div className="h-2.5 w-2.5 junimo-bounce rounded-full bg-[#9A55FF]"></div>
+              </div>
+              <span className="pixel-text-sm text-[#A05030]">
+                Junimo is thinking...
+              </span>
+              {onCancelThinking && (
+                <button
+                  onClick={onCancelThinking}
+                  className="ml-2 inline-flex items-center gap-1 stardew-box rounded px-2 py-1 text-xs text-[#A05030] hover:bg-[#C78F56]/20"
+                >
+                  <Square className="h-3 w-3" /> Pause
+                </button>
+              )}
             </div>
           </div>
         )}

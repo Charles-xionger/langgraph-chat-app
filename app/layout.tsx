@@ -1,28 +1,28 @@
-"use client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Nunito, Pixelify_Sans } from "next/font/google";
 import "./globals.css";
-import { ThreadProvider } from "@/contexts/ThreadContext";
-import { CodeThemeProvider } from "@/contexts/CodeThemeContext";
+import { Providers } from "@/components/Providers";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const nunito = Nunito({
   subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  variable: "--font-nunito",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const pixelifySans = Pixelify_Sans({
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-pixel",
 });
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 60 * 1000, // 1 minute
-    },
+export const metadata: Metadata = {
+  title: "Stardew Assistant",
+  description: "Your friendly AI companion from the valley",
+  generator: "v0.app",
+  icons: {
+    icon: "/icon.svg",
   },
-});
+};
 
 export default function RootLayout({
   children,
@@ -32,13 +32,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${nunito.variable} ${pixelifySans.variable} font-sans antialiased`}
       >
-        <QueryClientProvider client={queryClient}>
-          <CodeThemeProvider>
-            <ThreadProvider>{children}</ThreadProvider>
-          </CodeThemeProvider>
-        </QueryClientProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

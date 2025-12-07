@@ -88,7 +88,7 @@ export const MessageContent = ({ message }: MessageContentProps) => {
             if (isInline) {
               return (
                 <code
-                  className="rounded-md bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-sm font-mono text-pink-600 dark:text-pink-400 before:content-[''] after:content-['']"
+                  className="rounded-md bg-zinc-100 dark:bg-zinc-200 px-1.5 py-0.5 text-sm font-mono text-pink-600 dark:text-pink-700 before:content-[''] after:content-['']"
                   {...rest}
                 >
                   {children}

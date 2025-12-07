@@ -4,10 +4,11 @@ import {
 } from "@/app/api/agent/server-store";
 import { useStreamedMessages } from "@/hooks/useStreamedMessages";
 import { MessageOptions } from "@/types/message";
-import { Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { MessageList } from "./MessageList";
 import { MessageInput } from "./MessageInput";
+import { useThreadContext } from "@/contexts/ThreadContext";
+import Junimo from "./Junimo";
 
 interface IThreadProps {
   threadId: string;
@@ -15,13 +16,28 @@ interface IThreadProps {
 }
 
 export const Thread = ({ threadId, onFirstMessageSent }: IThreadProps) => {
+  const { setCurrentThread } = useThreadContext();
   const firstMessageInitiatedRef = useRef(false);
   const [awaitingFirstResponse, setAwaitingFirstResponse] = useState(false);
+  const { data: threads } = useGetThreads();
   const { data: messages, isLoading: isLoadingHistory } =
     useHistoryMessages(threadId);
 
   const { isSending, isReceiving, sendMessage, cancel } =
     useStreamedMessages(threadId);
+
+  // 更新当前线程信息到 context
+  useEffect(() => {
+    const thread = threads?.find((t) => t.id === threadId);
+    if (thread && messages) {
+      setCurrentThread({
+        id: thread.id,
+        title: thread.title,
+        updatedAt: thread.updatedAt,
+        messages: messages,
+      });
+    }
+  }, [threadId, threads, messages, setCurrentThread]);
 
   // 处理发送消息的逻辑
   const handleSendMessage = async (message: string, opts?: MessageOptions) => {
@@ -54,11 +70,17 @@ export const Thread = ({ threadId, onFirstMessageSent }: IThreadProps) => {
 
   if (isLoadingHistory) {
     return (
-      <div className="bg-background/95 supports-backdrop-filter:bg-background/60 absolute inset-0 flex items-center justify-center backdrop-blur">
-        <Loader2 className="text-primary h-8 w-8 animate-spin" />
-        <p className="text-muted-foreground mt-2">
-          Loading conversation history...
-        </p>
+      <div className="absolute inset-0 flex items-center justify-center bg-[#F2E6C2]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Junimo color="green" />
+            <Junimo color="yellow" />
+            <Junimo color="purple" />
+          </div>
+          <p className="pixel-text-sm text-[#A05030]">
+            Loading conversation history...
+          </p>
+        </div>
       </div>
     );
   }
@@ -67,10 +89,7 @@ export const Thread = ({ threadId, onFirstMessageSent }: IThreadProps) => {
     <div className="flex h-full flex-col">
       {/* 展示消息列表 */}
       <div className="flex-1 overflow-hidden">
-        <MessageList
-          messages={messages || []}
-          isLoading={isSending && !isReceiving}
-        />
+        <MessageList messages={messages || []} />
       </div>
 
       {/* message input */}

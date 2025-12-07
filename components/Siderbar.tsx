@@ -1,155 +1,246 @@
 import React, { useEffect } from "react";
-import { PanelLeftClose, MessageSquare } from "lucide-react";
+import {
+  PanelLeftClose,
+  MessageSquare,
+  PanelLeftOpen,
+  Plus,
+  SearchIcon,
+  FolderIcon,
+  Settings,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import SettingsPopover from "./SettingsPopover";
+import ThemeToggle from "./ThemeToggle";
+import { useRouter } from "next/navigation";
+import { useCreateThread } from "@/app/api/agent/server-store";
+import { Thread } from "@/types/message";
+
+function StardewStar() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-5 w-5 text-[#FFD700] sparkle"
+      fill="currentColor"
+    >
+      <path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z" />
+    </svg>
+  );
+}
 
 interface SidebarProps {
-  isOpen: boolean;
+  open: boolean;
+  onClose: () => void;
   toggle: () => void;
   children?: React.ReactNode;
+  sidebarCollapsed: boolean;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+  setShowSearchModal: (show: boolean) => void;
 }
 
 const SidebarComponent: React.FC<SidebarProps> = ({
-  isOpen,
+  open,
+  onClose,
   toggle,
   children,
+  sidebarCollapsed = false,
+  setSidebarCollapsed = () => {},
+  setShowSearchModal,
 }) => {
+  const router = useRouter();
+
+  // 创建线程
+  const createThreadMutation = useCreateThread((newThread: Thread) => {
+    // 创建成功后跳转到新线程
+    router.push(`/thread/${newThread.id}`);
+  });
+
+  // 处理创建新线程
+  const handleCreateThread = () => {
+    createThreadMutation.mutate();
+  };
+
   // Close sidebar on escape key press
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) toggle();
+      if (e.key === "Escape" && open) toggle();
     };
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
-  }, [isOpen, toggle]);
+  }, [open, toggle]);
+
+  if (sidebarCollapsed) {
+    return (
+      <aside className="z-50 flex h-full w-16 shrink-0 flex-col stardew-box !rounded-none !outline-none border-r-4 transition-all duration-300">
+        <div className="flex items-center justify-center border-b-4 border-[#552814] dark:border-[#8B6F47] px-3 py-3">
+          <button
+            onClick={() => setSidebarCollapsed(false)}
+            className="rounded p-2 hover:bg-[#C78F56]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9A55FF]"
+            aria-label="Open sidebar"
+            title="Open sidebar"
+          >
+            <PanelLeftOpen className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="flex flex-col items-center gap-4 pt-4">
+          <button
+            onClick={handleCreateThread}
+            disabled={createThreadMutation.isPending}
+            className="rounded p-2 hover:bg-[#C78F56]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9A55FF] disabled:opacity-50 disabled:cursor-not-allowed"
+            title="New Chat"
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+
+          <button
+            onClick={() => setShowSearchModal?.(true)}
+            className="rounded p-2 hover:bg-[#C78F56]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9A55FF]"
+            title="Search"
+          >
+            <SearchIcon className="h-5 w-5" />
+          </button>
+
+          <button
+            className="rounded p-2 hover:bg-[#C78F56]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9A55FF]"
+            title="Folders"
+          >
+            <FolderIcon className="h-5 w-5" />
+          </button>
+
+          <div className="mt-auto mb-4">
+            <SettingsPopover>
+              <button
+                className="rounded p-2 hover:bg-[#C78F56]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9A55FF]"
+                title="Settings"
+              >
+                <Settings className="h-5 w-5" />
+              </button>
+            </SettingsPopover>
+          </div>
+        </div>
+      </aside>
+    );
+  }
 
   return (
     <>
-      {/* Sidebar */}
-      <motion.aside
-        initial={false}
-        animate={{
-          x: isOpen ? 0 : -320, // 320px = w-80
-          width: isOpen ? 320 : 0,
-        }}
-        transition={{
-          duration: 0.3,
-          ease: [0.4, 0.0, 0.2, 1], // Custom ease curve
-        }}
-        className={`fixed top-0 left-0 z-30 h-screen overflow-hidden border-r border-gray-200/80 bg-white/95 backdrop-blur-xl shadow-xl md:sticky ${
-          isOpen ? "flex" : "hidden md:flex"
-        }`}
-      >
-        {/* Subtle border effect */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: isOpen ? 1 : 0 }}
-          transition={{ delay: 0.1 }}
-          className="absolute right-0 top-0 h-full w-px bg-linear-to-b from-transparent via-gray-200 to-transparent"
-        />
-
-        <div className="flex h-full w-80 shrink-0 flex-col overflow-hidden">
-          {/* Enhanced Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15, duration: 0.3 }}
-            className="flex items-center justify-between px-6 py-3 border-b border-gray-100/80"
-          >
-            <div className="flex items-center gap-3">
-              <motion.div
-                whileHover={{ rotate: 360 }}
-                transition={{ duration: 0.5 }}
-                className="rounded-lg p-2"
-                style={{
-                  background:
-                    "linear-gradient(90deg, #ecc1b0,#ffebd2,#b1b5e2,#7387ce,#4869bf)",
-                }}
-              >
-                <MessageSquare size={18} className="text-white" />
-              </motion.div>
-              <div>
-                <div className="text-lg font-semibold text-gray-900">Chats</div>
-                <div className="text-xs text-gray-500 -mt-1">Conversations</div>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Content Area with Stagger Animation */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2, duration: 0.3 }}
-            className="flex-1 overflow-y-auto px-4 py-4"
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25, duration: 0.3 }}
-            >
-              {children}
-            </motion.div>
-          </motion.div>
-
-          {/* Enhanced Bottom Action */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3, duration: 0.3 }}
-            className="border-t border-gray-100/80 p-4"
-          >
-            <motion.div
-              whileHover={{ scale: 1.02 }}
-              className="rounded-xl bg-gradient-to-br from-gray-50 to-gray-100/50 p-4 text-center backdrop-blur-sm"
-            >
-              <p className="text-sm text-gray-600 mb-2">Quick Actions</p>
-              <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
-                <span>Press</span>
-                <kbd className="rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-800 shadow-sm border border-gray-200">
-                  Esc
-                </kbd>
-                <span>to close</span>
-              </div>
-            </motion.div>
-          </motion.div>
-        </div>
-      </motion.aside>
-
-      {/* Enhanced Menu Toggle Button - Only show on mobile */}
-      <motion.button
-        initial={{ scale: 0 }}
-        animate={{
-          scale: isOpen ? 0 : 1,
-          opacity: isOpen ? 0 : 1,
-        }}
-        transition={{
-          duration: 0.2,
-          ease: "easeInOut",
-        }}
-        onClick={toggle}
-        className={`fixed top-5 left-5 z-40 rounded-xl bg-white p-3 shadow-lg border border-gray-200/80 backdrop-blur-xl md:hidden ${
-          isOpen
-            ? "pointer-events-none"
-            : "pointer-events-auto hover:shadow-xl hover:scale-105"
-        } transition-all duration-300`}
-        aria-label="Toggle navigation"
-      >
-        <PanelLeftClose size={20} className="text-gray-700" />
-      </motion.button>
-
-      {/* Enhanced Overlay Background - Only show on mobile */}
       <AnimatePresence>
-        {isOpen && (
+        {open && (
           <motion.div
+            key="overlay"
             initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            animate={{ opacity: 0.5 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.25, ease: "easeInOut" }}
-            className="fixed inset-0 z-20 bg-black/40 backdrop-blur-md md:hidden"
-            onClick={toggle}
-            aria-hidden="true"
+            className="fixed inset-0 z-40 bg-[#421808]/60 md:hidden"
+            onClick={onClose}
           />
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {open && (
+          <aside
+            key="sidebar"
+            className="fixed inset-y-0 left-0 z-50 flex h-full w-80 flex-col stardew-box !rounded-none !outline-none border-r-4 md:relative md:translate-x-0"
+          >
+            {/* Header */}
+            <div className="flex items-center gap-2 border-b-4 border-[#552814] dark:border-[#8B6F47] px-3 py-3">
+              <div className="flex items-center gap-2">
+                <StardewStar />
+                <div className="text-base font-bold tracking-tight pixel-text text-[#451806] dark:text-[#2C1810]">
+                  Stardew Assistant
+                </div>
+              </div>
+              <div className="ml-auto flex items-center gap-1">
+                <button
+                  onClick={() => setSidebarCollapsed(true)}
+                  className="hidden md:block rounded p-2 hover:bg-[#C78F56]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9A55FF]"
+                  aria-label="Close sidebar"
+                  title="Close sidebar"
+                >
+                  <PanelLeftClose className="h-5 w-5" />
+                </button>
+
+                <button
+                  onClick={onClose}
+                  className="md:hidden rounded p-2 hover:bg-[#C78F56]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9A55FF]"
+                  aria-label="Close sidebar"
+                >
+                  <PanelLeftClose className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Search */}
+            <div className="px-3 pt-3">
+              <label htmlFor="search" className="sr-only">
+                Search conversations
+              </label>
+              <div className="relative">
+                <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B4423] dark:text-[#6B4423]" />
+                <input
+                  id="search"
+                  type="text"
+                  placeholder="Search the valley..."
+                  onClick={() => setShowSearchModal(true)}
+                  onFocus={() => setShowSearchModal(true)}
+                  className="w-full inventory-slot rounded py-2 pl-9 pr-3 text-sm outline-none placeholder:text-[#6B4423]/70 dark:placeholder:text-[#6B4423]/70 focus:ring-2 focus:ring-[#9A55FF] bg-[#FFFAE6] dark:bg-[#F5EDD6] text-[#451806] dark:text-[#2C1810]"
+                />
+              </div>
+            </div>
+
+            {/* New Chat Button */}
+            <div className="px-3 pt-3">
+              <button
+                onClick={handleCreateThread}
+                disabled={createThreadMutation.isPending}
+                className="flex w-full items-center justify-center gap-2 stardew-btn rounded px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                title="New Chat"
+              >
+                <Plus className="h-4 w-4" />
+                {createThreadMutation.isPending
+                  ? "创建中..."
+                  : "Start New Adventure"}
+              </button>
+            </div>
+
+            {/* Navigation */}
+            <nav className="mt-4 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-2 pb-4">
+              {children}
+            </nav>
+
+            {/* Footer */}
+            <div className="mt-auto border-t-4 border-[#552814] dark:border-[#8B6F47] px-3 py-3">
+              <div className="flex items-center gap-2">
+                <SettingsPopover>
+                  <button className="inline-flex items-center gap-2 rounded px-2 py-2 text-sm hover:bg-[#C78F56]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9A55FF] text-[#451806] dark:text-[#2C1810]">
+                    <Settings className="h-4 w-4" /> Settings
+                  </button>
+                </SettingsPopover>
+                <div className="ml-auto">
+                  <ThemeToggle />
+                </div>
+              </div>
+              {/* User profile */}
+              <div className="mt-2 flex items-center gap-2 inventory-slot rounded p-2">
+                <div className="grid h-8 w-8 place-items-center rounded-full bg-[#5DCC52] text-xs font-bold text-white">
+                  FE
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-bold text-[#451806] dark:text-[#2C1810]">
+                    Farmer
+                  </div>
+                  <div className="truncate text-xs text-[#6B4423] dark:text-[#6B4423]">
+                    Pelican Town
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
+        )}
+      </AnimatePresence>
+
+      {/* footer */}
     </>
   );
 };

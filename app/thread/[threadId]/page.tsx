@@ -1,7 +1,7 @@
 "use client";
 
 import { MainLayout } from "@/components/MainLayout";
-import { Thread } from "@/components/Thread";
+import ChatPane from "@/components/ChatPane";
 import { useParams } from "next/navigation";
 
 export default function ThreadPage() {
@@ -10,7 +10,7 @@ export default function ThreadPage() {
 
   return (
     <MainLayout>
-      <Thread threadId={threadId} />
+      <ChatPane threadId={threadId} />
     </MainLayout>
   );
 }

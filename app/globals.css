@@ -1,122 +1,329 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
 }
 
-:root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
+/* Stardew Valley themed design tokens */
+@layer base {
+  :root {
+    --font-sans: var(--font-nunito), "Nunito", sans-serif;
+    /* Use Pixelify Sans as pixel font */
+    --font-pixel: var(--font-pixel), "Pixelify Sans", monospace;
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+    /* Stardew Valley Color Palette */
+    --stardew-cream: #fffae6;
+    --stardew-parchment: #f2e6c2;
+    --stardew-wood-light: #c78f56;
+    --stardew-wood: #a05030;
+    --stardew-wood-dark: #552814;
+    --stardew-outline: #421808;
+    --stardew-text: #451806;
+    --stardew-purple: #9a55ff;
+    --stardew-green: #5dcc52;
+    --stardew-gold: #ffd700;
+    --stardew-blue: #4a90d9;
+
+    --background: 42 100% 96%;
+    --foreground: 15 78% 15%;
+    --card: 42 60% 92%;
+    --card-foreground: 15 78% 15%;
+    --popover: 42 60% 92%;
+    --popover-foreground: 15 78% 15%;
+    --primary: 20 55% 40%;
+    --primary-foreground: 42 100% 96%;
+    --secondary: 35 50% 75%;
+    --secondary-foreground: 15 78% 15%;
+    --muted: 35 40% 85%;
+    --muted-foreground: 15 50% 35%;
+    --accent: 268 100% 67%;
+    --accent-foreground: 42 100% 96%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 42 100% 96%;
+    --border: 20 55% 33%;
+    --input: 20 55% 40%;
+    --ring: 268 100% 67%;
+    --chart-1: 268 100% 67%;
+    --chart-2: 120 58% 56%;
+    --chart-3: 45 100% 50%;
+    --chart-4: 20 55% 40%;
+    --chart-5: 210 60% 55%;
+    --radius: 0.25rem;
+    --sidebar-background: 42 60% 92%;
+    --sidebar-foreground: 15 78% 15%;
+    --sidebar-primary: 20 55% 40%;
+    --sidebar-primary-foreground: 42 100% 96%;
+    --sidebar-accent: 35 50% 80%;
+    --sidebar-accent-foreground: 15 78% 15%;
+    --sidebar-border: 20 55% 33%;
+    --sidebar-ring: 268 100% 67%;
+  }
+
+  /* Dark mode - evening/night in Stardew */
+  .dark {
+    --background: 220 25% 12%;
+    --foreground: 42 60% 90%;
+    --card: 220 20% 18%;
+    --card-foreground: 42 60% 90%;
+    --popover: 220 20% 18%;
+    --popover-foreground: 42 60% 90%;
+    --primary: 35 60% 55%;
+    --primary-foreground: 220 25% 12%;
+    --secondary: 220 15% 25%;
+    --secondary-foreground: 42 60% 90%;
+    --muted: 220 15% 22%;
+    --muted-foreground: 42 30% 60%;
+    --accent: 268 80% 60%;
+    --accent-foreground: 42 100% 96%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 42 100% 96%;
+    --border: 35 40% 35%;
+    --input: 35 40% 30%;
+    --ring: 268 80% 60%;
+    --sidebar-background: 220 20% 15%;
+    --sidebar-foreground: 42 60% 90%;
+    --sidebar-primary: 35 60% 55%;
+    --sidebar-primary-foreground: 220 25% 12%;
+    --sidebar-accent: 220 15% 22%;
+    --sidebar-accent-foreground: 42 60% 90%;
+    --sidebar-border: 35 40% 30%;
+    --sidebar-ring: 268 80% 60%;
+  }
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    border-color: hsl(var(--border));
   }
   body {
-    @apply bg-background text-foreground;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans);
   }
+}
+
+/* Stardew Valley UI Components */
+@layer components {
+  /* Wood frame box effect */
+  .stardew-box {
+    background-color: var(--stardew-parchment);
+    border: 4px solid var(--stardew-wood-dark);
+    box-shadow: inset 4px 4px 0px var(--stardew-wood-light),
+      inset -4px -4px 0px var(--stardew-wood);
+    outline: 2px solid var(--stardew-outline);
+    border-radius: 4px;
+  }
+
+  .dark .stardew-box {
+    background-color: hsl(220, 20%, 18%);
+    border-color: hsl(35, 40%, 30%);
+    box-shadow: inset 4px 4px 0px hsl(35, 50%, 40%),
+      inset -4px -4px 0px hsl(35, 40%, 25%);
+    outline-color: hsl(220, 25%, 10%);
+  }
+
+  /* Stardew button style */
+  .stardew-btn {
+    background: linear-gradient(
+      180deg,
+      var(--stardew-wood-light) 0%,
+      var(--stardew-wood) 100%
+    );
+    border: 3px solid var(--stardew-wood-dark);
+    box-shadow: inset 2px 2px 0px rgba(255, 255, 255, 0.2),
+      2px 2px 0px var(--stardew-outline);
+    color: var(--stardew-cream);
+    text-shadow: 1px 1px 0px var(--stardew-outline);
+    transition: all 0.1s ease;
+  }
+
+  .stardew-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: inset 2px 2px 0px rgba(255, 255, 255, 0.3),
+      3px 3px 0px var(--stardew-outline);
+  }
+
+  .stardew-btn:active {
+    transform: translateY(1px);
+    box-shadow: inset -2px -2px 0px rgba(255, 255, 255, 0.2),
+      1px 1px 0px var(--stardew-outline);
+  }
+
+  .dark .stardew-btn {
+    background: linear-gradient(
+      180deg,
+      hsl(35, 50%, 45%) 0%,
+      hsl(35, 45%, 35%) 100%
+    );
+    border-color: hsl(35, 40%, 25%);
+  }
+
+  /* Improved pixel font classes using Pixelify Sans */
+
+  /* Small pixel text - for section headers */
+  .pixel-text-sm {
+    font-family: var(--font-pixel);
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  /* Medium pixel text - for sidebar headers */
+  .pixel-text-md {
+    font-family: var(--font-pixel);
+    font-size: 1.125rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  /* Large pixel text - for main titles with shadow */
+  .pixel-text-lg {
+    font-family: var(--font-pixel);
+    font-size: 2rem;
+    font-weight: 700;
+    text-shadow: 2px 2px 0px var(--stardew-outline);
+    letter-spacing: 1px;
+  }
+
+  /* Extra large pixel text - for hero titles */
+  .pixel-text-xl {
+    font-family: var(--font-pixel);
+    font-size: 2.5rem;
+    font-weight: 700;
+    text-shadow: 3px 3px 0px var(--stardew-outline);
+    letter-spacing: 1px;
+  }
+
+  .dark .pixel-text-lg,
+  .dark .pixel-text-xl {
+    text-shadow: 2px 2px 0px hsl(220, 25%, 8%);
+  }
+
+  /* Remove old classes that won't be used */
+  .pixel-section-header {
+    font-family: var(--font-pixel);
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  /* Medium pixel text for titles */
+  /* Only apply shadow on larger pixel text */
+
+  .dark .pixel-text-lg {
+    text-shadow: 2px 2px 0px hsl(220, 25%, 8%);
+  }
+
+  /* Pixel decorative dash */
+  .pixel-dash::before {
+    content: "◆";
+    font-size: 0.5rem;
+    margin-right: 6px;
+    opacity: 0.7;
+  }
+
+  /* Section header style - clear and readable */
+  .section-header {
+    font-family: "Nunito", sans-serif;
+    font-weight: 700;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* Inventory slot style */
+  .inventory-slot {
+    background: linear-gradient(
+      135deg,
+      var(--stardew-parchment) 0%,
+      #e8dcc0 100%
+    );
+    border: 3px solid var(--stardew-wood-dark);
+    box-shadow: inset 2px 2px 0px rgba(255, 255, 255, 0.4),
+      inset -2px -2px 0px var(--stardew-wood);
+  }
+
+  .inventory-slot.active {
+    border-color: var(--stardew-gold);
+    box-shadow: 0 0 0 2px var(--stardew-outline),
+      inset 2px 2px 0px rgba(255, 255, 255, 0.4),
+      inset -2px -2px 0px var(--stardew-wood);
+  }
+
+  .dark .inventory-slot {
+    background: linear-gradient(
+      135deg,
+      var(--stardew-parchment) 0%,
+      #e8dcc0 100%
+    );
+    border-color: var(--stardew-wood-dark);
+  }
+
+  .dark .inventory-slot.active {
+    border-color: var(--stardew-gold);
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 12px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--stardew-parchment);
+    border: 2px solid var(--stardew-wood-dark);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--stardew-wood);
+    border: 2px solid var(--stardew-wood-dark);
+    border-radius: 2px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--stardew-wood-light);
+  }
+
+  .dark ::-webkit-scrollbar-track {
+    background: hsl(220, 20%, 15%);
+    border-color: hsl(35, 40%, 25%);
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    background: hsl(35, 45%, 35%);
+    border-color: hsl(35, 40%, 25%);
+  }
+}
+
+/* Junimo bounce animation */
+@keyframes junimo-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.junimo-bounce {
+  animation: junimo-bounce 0.6s ease-in-out infinite;
+}
+
+/* Sparkle animation for gold elements */
+@keyframes sparkle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.sparkle {
+  animation: sparkle 1.5s ease-in-out infinite;
 }
