@@ -105,9 +105,9 @@ export default function ChatPane({
       <div className="flex h-full w-full items-center justify-center bg-[#F2E6C2]">
         <div className="flex flex-col items-center gap-4">
           <div className="flex items-center gap-2">
-            <Junimo color="green" />
-            <Junimo color="yellow" />
-            <Junimo color="purple" />
+            <Junimo color="green" delay={0} />
+            <Junimo color="yellow" delay={0.15} />
+            <Junimo color="purple" delay={0.3} />
           </div>
           <p className="pixel-text-sm text-[#A05030]">
             Loading conversation history...
@@ -122,13 +122,12 @@ export default function ChatPane({
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-6 sm:px-8">
         {!messages || messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center">
-            <div className="relative mb-6">
-              <div className="w-16 h-20 bg-[#5DCC52] rounded-t-full relative junimo-bounce">
-                <div className="absolute top-5 left-3 w-2.5 h-2.5 bg-[#421808] rounded-full" />
-                <div className="absolute top-5 right-3 w-2.5 h-2.5 bg-[#421808] rounded-full" />
-                <div className="absolute -top-2 left-3 w-2 h-4 bg-[#3da83d] rounded-full transform -rotate-12" />
-                <div className="absolute -top-2 right-3 w-2 h-4 bg-[#3da83d] rounded-full transform rotate-12" />
-              </div>
+            <div className="mb-6">
+              <img
+                src="/junimo-dance.gif"
+                alt="Junimo"
+                className="w-20 h-20 object-contain mx-auto"
+              />
             </div>
             <h2 className="pixel-text-xl text-[#451806] dark:text-[#F2E6C2] mb-3 flex items-center gap-3">
               <span className="text-[#FFD700] text-xl">✦</span>

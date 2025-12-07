@@ -69,13 +69,12 @@ export const MessageList = ({
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-center">
             <div className="space-y-3">
-              <div className="mx-auto relative">
-                <div className="w-16 h-18 bg-[#5DCC52] rounded-t-full relative mx-auto">
-                  <div className="absolute top-5 left-3 w-3 h-3 bg-[#421808] rounded-full" />
-                  <div className="absolute top-5 right-3 w-3 h-3 bg-[#421808] rounded-full" />
-                  <div className="absolute -top-2 left-3 w-2 h-4 bg-[#3da83d] rounded-full transform -rotate-12" />
-                  <div className="absolute -top-2 right-3 w-2 h-4 bg-[#3da83d] rounded-full transform rotate-12" />
-                </div>
+              <div className="mx-auto">
+                <img
+                  src="/junimo.png"
+                  alt="Junimo"
+                  className="w-16 h-16 object-contain mx-auto"
+                />
               </div>
               <p className="text-[#A05030] pixel-text-sm">
                 Start a conversation by sending a message
@@ -108,13 +107,12 @@ export const MessageList = ({
                   }`}
                 >
                   {message.type !== "human" && (
-                    <div className="mt-0.5 relative">
-                      <div className="w-8 h-9 bg-[#5DCC52] rounded-t-full relative">
-                        <div className="absolute top-2.5 left-1.5 w-1.5 h-1.5 bg-[#421808] rounded-full" />
-                        <div className="absolute top-2.5 right-1.5 w-1.5 h-1.5 bg-[#421808] rounded-full" />
-                        <div className="absolute -top-1 left-1.5 w-1 h-2 bg-[#3da83d] rounded-full transform -rotate-12" />
-                        <div className="absolute -top-1 right-1.5 w-1 h-2 bg-[#3da83d] rounded-full transform rotate-12" />
-                      </div>
+                    <div className="mt-0.5 shrink-0">
+                      <img
+                        src="/junimo.png"
+                        alt="Junimo"
+                        className="w-8 h-8 object-contain"
+                      />
                     </div>
                   )}
                   <div
@@ -160,13 +158,12 @@ export const MessageList = ({
         )}
         {isThinking && (
           <div className="flex gap-3">
-            <div className="mt-0.5 relative">
-              <div className="w-8 h-9 bg-[#5DCC52] rounded-t-full relative">
-                <div className="absolute top-2.5 left-1.5 w-1.5 h-1.5 bg-[#421808] rounded-full" />
-                <div className="absolute top-2.5 right-1.5 w-1.5 h-1.5 bg-[#421808] rounded-full" />
-                <div className="absolute -top-1 left-1.5 w-1 h-2 bg-[#3da83d] rounded-full transform -rotate-12" />
-                <div className="absolute -top-1 right-1.5 w-1 h-2 bg-[#3da83d] rounded-full transform rotate-12" />
-              </div>
+            <div className="mt-0.5 shrink-0">
+              <img
+                src="/junimo-dance.gif"
+                alt="Junimo thinking"
+                className="w-8 h-8 object-contain"
+              />
             </div>
             <div className="flex items-center gap-3 inventory-slot rounded-lg px-4 py-2">
               <div className="flex items-center gap-1">

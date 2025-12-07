@@ -21,7 +21,7 @@ interface ConversationRowProps {
   onSelect: () => void;
   onTogglePin: () => void;
   onRename: (id: string, newTitle: string) => void;
-  onDelete: (id: string) => void;
+  onDeleteRequest: (id: string, title: string) => void;
   showMeta?: boolean;
 }
 
@@ -31,7 +31,7 @@ export default function ConversationRow({
   onSelect,
   onTogglePin,
   onRename,
-  onDelete,
+  onDeleteRequest,
   showMeta,
 }: ConversationRowProps) {
   const [showMenu, setShowMenu] = useState(false);
@@ -89,9 +89,7 @@ export default function ConversationRow({
   };
 
   const handleDelete = () => {
-    if (confirm(`Delete "${data.title}"? This action cannot be undone.`)) {
-      onDelete(data.id);
-    }
+    onDeleteRequest(data.id, data.title);
     setShowMenu(false);
   };
 
@@ -102,16 +100,24 @@ export default function ConversationRow({
 
   return (
     <div className="group relative">
-      <button
+      <div
         onClick={onSelect}
         onContextMenu={handleContextMenu}
         className={cls(
-          "flex w-full items-center gap-2 rounded px-2 py-2 text-left transition-all",
+          "flex w-full items-center gap-2 rounded px-2 py-2 text-left transition-all cursor-pointer",
           active
             ? "inventory-slot active"
             : "hover:bg-[#C78F56]/20 dark:hover:bg-[#C78F56]/10"
         )}
         title={data.title}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelect();
+          }
+        }}
       >
         <div className="min-w-0 flex-1">
           {isRenaming ? (
@@ -157,7 +163,7 @@ export default function ConversationRow({
             <MoreHorizontal className="h-4 w-4" />
           </button>
         </div>
-      </button>
+      </div>
 
       <AnimatePresence>
         {showMenu && (

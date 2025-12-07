@@ -73,9 +73,9 @@ export const Thread = ({ threadId, onFirstMessageSent }: IThreadProps) => {
       <div className="absolute inset-0 flex items-center justify-center bg-[#F2E6C2]">
         <div className="flex flex-col items-center gap-4">
           <div className="flex items-center gap-2">
-            <Junimo color="green" />
-            <Junimo color="yellow" />
-            <Junimo color="purple" />
+            <Junimo color="green" delay={0} />
+            <Junimo color="yellow" delay={0.15} />
+            <Junimo color="purple" delay={0.3} />
           </div>
           <p className="pixel-text-sm text-[#A05030]">
             Loading conversation history...

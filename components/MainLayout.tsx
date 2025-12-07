@@ -7,6 +7,16 @@ import GhostIconButton from "./GhostIconButton";
 import { Calendar, LayoutGrid, MoreHorizontal } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
 import Junimo from "./Junimo";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -16,10 +26,32 @@ export function MainLayout({ children }: MainLayoutProps) {
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [threadToDelete, setThreadToDelete] = useState<{
+    id: string;
+    title: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   const toggleSidebar = useCallback(() => {
     setSidebarOpen((prev) => !prev);
   }, []);
+
+  const handleDeleteRequest = useCallback(
+    (threadId: string, threadTitle: string, onConfirm: () => void) => {
+      setThreadToDelete({ id: threadId, title: threadTitle, onConfirm });
+      setDeleteDialogOpen(true);
+    },
+    []
+  );
+
+  const confirmDelete = useCallback(() => {
+    if (threadToDelete) {
+      threadToDelete.onConfirm();
+    }
+    setDeleteDialogOpen(false);
+    setThreadToDelete(null);
+  }, [threadToDelete]);
 
   return (
     <main className="h-screen w-full bg-[#FFFAE6] text-[#451806] dark:bg-[#E8DCC0] dark:text-[#2C1810]">
@@ -52,7 +84,7 @@ export function MainLayout({ children }: MainLayoutProps) {
           setShowSearchModal={setShowSearchModal}
         >
           {/* thread List */}
-          <ThreadList />
+          <ThreadList onDeleteRequest={handleDeleteRequest} />
         </Sidebar>
 
         {/* Main Content area */}
@@ -68,6 +100,30 @@ export function MainLayout({ children }: MainLayoutProps) {
           <Junimo color="green" />
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>🗑️ Delete Thread</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{threadToDelete?.title}"? This
+              action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="stardew-btn bg-[#8B7355] hover:bg-[#A05030] text-white border-[#6B4423]">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="stardew-btn bg-gradient-to-b from-[#D84545] to-[#B83838] hover:from-[#E05555] hover:to-[#C84848] text-white border-[#8B2828]"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }

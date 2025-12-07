@@ -70,7 +70,7 @@ const SidebarComponent: React.FC<SidebarProps> = ({
 
   if (sidebarCollapsed) {
     return (
-      <aside className="z-50 flex h-full w-16 shrink-0 flex-col stardew-box !rounded-none !outline-none border-r-4 transition-all duration-300">
+      <aside className="z-50 flex h-full w-16 shrink-0 flex-col stardew-box rounded-none! outline-none! border-r-4 transition-all duration-300">
         <div className="flex items-center justify-center border-b-4 border-[#552814] dark:border-[#8B6F47] px-3 py-3">
           <button
             onClick={() => setSidebarCollapsed(false)}
@@ -141,7 +141,7 @@ const SidebarComponent: React.FC<SidebarProps> = ({
         {open && (
           <aside
             key="sidebar"
-            className="fixed inset-y-0 left-0 z-50 flex h-full w-80 flex-col stardew-box !rounded-none !outline-none border-r-4 md:relative md:translate-x-0"
+            className="fixed inset-y-0 left-0 z-50 flex h-full w-80 flex-col stardew-box rounded-none! outline-none! border-r-4 md:relative md:translate-x-0"
           >
             {/* Header */}
             <div className="flex items-center gap-2 border-b-4 border-[#552814] dark:border-[#8B6F47] px-3 py-3">

@@ -1,29 +1,37 @@
 type JunimoColor = "green" | "blue" | "red" | "yellow" | "purple";
 
+interface JunimoProps {
+  color?: JunimoColor;
+  className?: string;
+  animate?: boolean;
+  delay?: number; // 动画延迟（秒）
+}
+
 function Junimo({
   color = "green",
   className = "",
-}: {
-  color?: JunimoColor;
-  className?: string;
-}) {
-  const colors: Record<JunimoColor, string> = {
-    green: "bg-green-500",
-    blue: "bg-blue-400",
-    red: "bg-red-400",
-    yellow: "bg-yellow-400",
-    purple: "bg-purple-500",
+  animate = true,
+  delay = 0,
+}: JunimoProps) {
+  const colorFilters: Record<JunimoColor, string> = {
+    green: "hue-rotate(0deg)", // 原始绿色
+    blue: "hue-rotate(180deg)", // 蓝色
+    yellow: "hue-rotate(60deg)", // 黄色
+    purple: "hue-rotate(270deg)", // 紫色
+    red: "hue-rotate(330deg)", // 红色
   };
+
   return (
-    <div className={`relative ${className}`}>
-      <div
-        className={`w-6 h-7 ${colors[color]} rounded-t-full relative junimo-bounce`}
-      >
-        <div className="absolute top-2 left-1 w-1.5 h-1.5 bg-black rounded-full" />
-        <div className="absolute top-2 right-1 w-1.5 h-1.5 bg-black rounded-full" />
-        <div className="absolute -top-1 left-1 w-1 h-2 bg-green-700 rounded-full transform -rotate-12" />
-        <div className="absolute -top-1 right-1 w-1 h-2 bg-green-700 rounded-full transform rotate-12" />
-      </div>
+    <div className={`relative inline-block ${className}`}>
+      <img
+        src="/junimo.svg"
+        alt="Junimo"
+        className={`w-8 h-8 object-contain ${animate ? "junimo-bounce" : ""}`}
+        style={{
+          filter: colorFilters[color],
+          animationDelay: `${delay}s`,
+        }}
+      />
     </div>
   );
 }

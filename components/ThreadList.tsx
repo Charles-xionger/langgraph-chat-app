@@ -10,7 +10,15 @@ import {
 import { Thread } from "@/types/message";
 import ConversationRow from "./ConversationRow";
 
-export const ThreadList = () => {
+interface ThreadListProps {
+  onDeleteRequest: (
+    threadId: string,
+    threadTitle: string,
+    onConfirm: () => void
+  ) => void;
+}
+
+export const ThreadList = ({ onDeleteRequest }: ThreadListProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const [pinnedThreads, setPinnedThreads] = useState<Set<string>>(new Set());
@@ -52,13 +60,18 @@ export const ThreadList = () => {
     updateThreadMutation.mutate({ threadId, title: newTitle });
   };
 
-  // 处理删除
-  const handleDelete = (threadId: string) => {
-    deleteThreadMutation.mutate(threadId);
-    // 如果删除的是当前线程，跳转到首页
-    if (threadId === currentThreadId) {
-      router.push("/");
-    }
+  // 请求删除确认
+  const handleDeleteRequestInternal = (
+    threadId: string,
+    threadTitle: string
+  ) => {
+    onDeleteRequest(threadId, threadTitle, () => {
+      deleteThreadMutation.mutate(threadId);
+      // 如果删除的是当前线程，跳转到首页
+      if (threadId === currentThreadId) {
+        router.push("/");
+      }
+    });
   };
 
   if (isLoading) {
@@ -98,7 +111,7 @@ export const ThreadList = () => {
                 onSelect={() => handleThreadClick(thread.id)}
                 onTogglePin={() => handleTogglePin(thread.id)}
                 onRename={handleRename}
-                onDelete={handleDelete}
+                onDeleteRequest={handleDeleteRequestInternal}
                 showMeta={false}
               />
             ))}

@@ -19,7 +19,7 @@ export default function SettingsPopover({ children }: { children: ReactNode }) {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent
-        className="w-80 p-0 stardew-box !rounded-lg border-none"
+        className="w-80 p-0 stardew-box rounded-lg! border-none"
         align="start"
         side="top"
       >
