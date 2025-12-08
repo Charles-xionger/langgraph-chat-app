@@ -129,20 +129,20 @@ export default function ConversationRow({
               onBlur={handleRenameSubmit}
               onKeyDown={handleRenameKeyDown}
               onClick={(e) => e.stopPropagation()}
-              className="w-full rounded border-2 border-[#9A55FF] bg-[#FFFAE6] dark:bg-[#F5EDD6] px-1 py-0.5 text-sm font-medium outline-none text-[#451806] dark:text-[#2C1810]"
+              className="w-full rounded border-2 border-[#9A55FF] bg-[#FFFAE6] dark:bg-[#2a2f3e] px-1 py-0.5 text-sm font-medium outline-none text-[#451806] dark:text-[#F2E6C2]"
             />
           ) : (
             <div className="flex items-center gap-2">
-              <span className="truncate text-sm font-medium tracking-tight text-[#451806] dark:text-[#2C1810]">
+              <span className="truncate text-sm font-medium tracking-tight text-[#451806] dark:text-[#F2E6C2]">
                 {data.title}
               </span>
-              <span className="shrink-0 text-[11px] text-[#A05030] dark:text-[#6B4423]">
+              <span className="shrink-0 text-[11px] text-[#A05030] dark:text-[#C78F56]">
                 {timeAgo(data.updatedAt)}
               </span>
             </div>
           )}
           {showMeta && !isRenaming && (
-            <div className="mt-0.5 flex items-center gap-2 text-[11px] text-[#A05030] dark:text-[#6B4423]">
+            <div className="mt-0.5 flex items-center gap-2 text-[11px] text-[#A05030] dark:text-[#8B7355]">
               <span>{count} messages</span>
             </div>
           )}
@@ -157,7 +157,7 @@ export default function ConversationRow({
               e.stopPropagation();
               setShowMenu(!showMenu);
             }}
-            className="rounded p-1 text-[#A05030] dark:text-[#6B4423] opacity-0 transition group-hover:opacity-100 hover:bg-[#C78F56]/30"
+            className="rounded p-1 text-[#A05030] dark:text-[#C78F56] opacity-0 transition group-hover:opacity-100 hover:bg-[#C78F56]/30"
             aria-label="More actions"
           >
             <MoreHorizontal className="h-4 w-4" />
@@ -181,7 +181,7 @@ export default function ConversationRow({
                   onTogglePin();
                   setShowMenu(false);
                 }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[#C78F56]/20 rounded text-[#451806] dark:text-[#2C1810]"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[#C78F56]/20 rounded text-[#451806] dark:text-[#F2E6C2]"
               >
                 <Star
                   className={cls(
@@ -198,7 +198,7 @@ export default function ConversationRow({
                   e.stopPropagation();
                   handleRename();
                 }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[#C78F56]/20 rounded text-[#451806] dark:text-[#2C1810]"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[#C78F56]/20 rounded text-[#451806] dark:text-[#F2E6C2]"
               >
                 <Pencil className="h-3.5 w-3.5" /> Rename
               </button>
@@ -221,7 +221,7 @@ export default function ConversationRow({
       </AnimatePresence>
 
       {/* Preview tooltip */}
-      <div className="pointer-events-none absolute left-[calc(100%+6px)] top-1 hidden w-64 stardew-box rounded p-3 text-xs text-[#451806] dark:text-[#2C1810] md:group-hover:block">
+      <div className="pointer-events-none absolute left-[calc(100%+6px)] top-1 hidden w-64 stardew-box rounded p-3 text-xs text-[#451806] dark:text-[#F2E6C2] md:group-hover:block">
         <div className="line-clamp-6 whitespace-pre-wrap">{data.preview}</div>
       </div>
     </div>

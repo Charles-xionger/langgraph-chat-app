@@ -77,7 +77,11 @@ export const ThreadList = ({ onDeleteRequest }: ThreadListProps) => {
   if (isLoading) {
     return (
       <div className="p-4">
-        <div className="text-sm text-muted-foreground">加载中...</div>
+        <div className="stardew-box p-3 text-center">
+          <div className="text-sm text-[--stardew-wood] dark:text-[--stardew-wood-light]">
+            🌾 加载中...
+          </div>
+        </div>
       </div>
     );
   }
@@ -85,8 +89,10 @@ export const ThreadList = ({ onDeleteRequest }: ThreadListProps) => {
   if (error) {
     return (
       <div className="p-4">
-        <div className="text-sm text-destructive">
-          加载失败: {error.message}
+        <div className="stardew-box p-3 text-center border-2 border-red-600 dark:border-red-500">
+          <div className="text-sm text-red-700 dark:text-red-400">
+            ⚠️ 加载失败: {error.message}
+          </div>
         </div>
       </div>
     );
@@ -117,8 +123,15 @@ export const ThreadList = ({ onDeleteRequest }: ThreadListProps) => {
             ))}
           </div>
         ) : (
-          <div className="p-4 text-center text-sm text-muted-foreground">
-            暂无对话，点击上方按钮创建新对话
+          <div className="p-4">
+            <div className="stardew-box p-4 text-center">
+              <div className="text-sm text-[--stardew-wood] dark:text-[--stardew-wood-light]">
+                📝 暂无对话
+              </div>
+              <div className="text-xs text-[--stardew-wood] dark:text-[--stardew-wood-light] opacity-70 mt-1">
+                点击上方按钮创建新对话
+              </div>
+            </div>
           </div>
         )}
       </div>

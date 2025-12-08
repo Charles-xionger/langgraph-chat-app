@@ -3,6 +3,7 @@ import { MoreHorizontal } from "lucide-react";
 import GhostIconButton from "./GhostIconButton";
 import { timeAgo, estimateTokens } from "@/lib/utils";
 import { useThreadContext } from "@/contexts/ThreadContext";
+import EnergyDisplay from "./EnergyDisplay";
 
 export default function Header() {
   const { currentThread } = useThreadContext();
@@ -16,23 +17,24 @@ export default function Header() {
       <div className="flex-1 min-w-0">
         {currentThread ? (
           <>
-            <h1 className="truncate text-base font-bold tracking-tight pixel-text text-[#451806] dark:text-[#2C1810]">
+            <h1 className="truncate text-base font-bold tracking-tight pixel-text text-[#451806] dark:text-[#F2E6C2]">
               {currentThread.title || "未命名对话"}
             </h1>
-            <div className="flex items-center gap-2 text-[11px] text-[#A05030] dark:text-[#6B4423]">
+            <div className="flex items-center gap-2 text-[11px] text-[#A05030] dark:text-[#C78F56]">
               <span>{timeAgo(currentThread.updatedAt)}</span>
               <span className="text-[#FFD700]">★</span>
-              <span className="text-[#5DCC52]">
-                {tokens.toLocaleString()} energy
-              </span>
+              <EnergyDisplay
+                tokens={tokens}
+                messageCount={currentThread.messages?.length ?? 0}
+              />
             </div>
           </>
         ) : (
           <>
-            <h1 className="truncate text-base font-bold tracking-tight pixel-text text-[#451806] dark:text-[#2C1810]">
+            <h1 className="truncate text-base font-bold tracking-tight pixel-text text-[#451806] dark:text-[#F2E6C2]">
               Stardew Assistant
             </h1>
-            <div className="flex items-center gap-2 text-[11px] text-[#A05030] dark:text-[#6B4423]">
+            <div className="flex items-center gap-2 text-[11px] text-[#A05030] dark:text-[#C78F56]">
               <span>开始新的冒险</span>
               <span className="text-[#5DCC52]">★</span>
               <span className="text-[#9A55FF]">准备就绪</span>

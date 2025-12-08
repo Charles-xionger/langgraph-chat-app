@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { ThreadProvider } from "@/contexts/ThreadContext";
 import { CodeThemeProvider } from "@/contexts/CodeThemeContext";
-import { ThemeProvider } from "@/contexts/ThemeContext";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -20,11 +19,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <CodeThemeProvider>
-          <ThreadProvider>{children}</ThreadProvider>
-        </CodeThemeProvider>
-      </ThemeProvider>
+      <CodeThemeProvider>
+        <ThreadProvider>{children}</ThreadProvider>
+      </CodeThemeProvider>
     </QueryClientProvider>
   );
 }

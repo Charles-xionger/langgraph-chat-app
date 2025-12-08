@@ -2,7 +2,7 @@
 
 import { MessageResponse } from "@/types/message";
 import { Copy, Check } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import {
@@ -12,6 +12,8 @@ import {
   atomDark,
   nightOwl,
   tomorrow,
+  prism,
+  materialLight,
 } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkGfm from "remark-gfm";
 import { useCodeTheme } from "@/contexts/CodeThemeContext";
@@ -22,10 +24,29 @@ interface MessageContentProps {
 
 export const MessageContent = ({ message }: MessageContentProps) => {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [isDark, setIsDark] = useState(false);
   const { theme } = useCodeTheme();
 
-  // 主题映射
-  const themeStyles = {
+  // 检测系统主题
+  useEffect(() => {
+    const checkTheme = () => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    };
+
+    checkTheme();
+
+    // 监听系统主题变化
+    const observer = new MutationObserver(checkTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  // 暗色主题映射
+  const darkThemeStyles = {
     dracula: { style: dracula, bg: "#282a36", headerBg: "#1e1f29" },
     oneDark: { style: oneDark, bg: "#282c34", headerBg: "#21252b" },
     vscDarkPlus: { style: vscDarkPlus, bg: "#1e1e1e", headerBg: "#252526" },
@@ -34,9 +55,21 @@ export const MessageContent = ({ message }: MessageContentProps) => {
     githubDark: { style: tomorrow, bg: "#0d1117", headerBg: "#161b22" },
   } as const;
 
-  type ThemeKey = keyof typeof themeStyles;
+  // 亮色主题映射
+  const lightThemeStyles = {
+    dracula: { style: prism, bg: "#f5f5f5", headerBg: "#e8e8e8" },
+    oneDark: { style: prism, bg: "#fafafa", headerBg: "#efefef" },
+    vscDarkPlus: { style: materialLight, bg: "#ffffff", headerBg: "#f5f5f5" },
+    atomDark: { style: prism, bg: "#f8f8f8", headerBg: "#ececec" },
+    nightOwl: { style: prism, bg: "#fbfbfb", headerBg: "#f0f0f0" },
+    githubDark: { style: prism, bg: "#ffffff", headerBg: "#f6f8fa" },
+  } as const;
 
-  const currentTheme = themeStyles[theme as ThemeKey] || themeStyles.dracula;
+  type ThemeKey = keyof typeof darkThemeStyles;
+
+  const currentTheme = isDark
+    ? darkThemeStyles[theme as ThemeKey] || darkThemeStyles.dracula
+    : lightThemeStyles[theme as ThemeKey] || lightThemeStyles.dracula;
 
   const copyToClipboard = async (code: string, id: string) => {
     try {
@@ -88,7 +121,7 @@ export const MessageContent = ({ message }: MessageContentProps) => {
             if (isInline) {
               return (
                 <code
-                  className="rounded-md bg-zinc-100 dark:bg-zinc-200 px-1.5 py-0.5 text-sm font-mono text-pink-600 dark:text-pink-700 before:content-[''] after:content-['']"
+                  className="rounded-md bg-pink-50 dark:bg-zinc-200 px-1.5 py-0.5 text-sm font-mono text-pink-600 dark:text-pink-700 before:content-[''] after:content-['']"
                   {...rest}
                 >
                   {children}
@@ -106,18 +139,26 @@ export const MessageContent = ({ message }: MessageContentProps) => {
                   className="flex items-center justify-between border-b border-border px-4 py-2"
                   style={{ backgroundColor: currentTheme.headerBg }}
                 >
-                  <span className="text-xs font-mono text-gray-300 uppercase">
+                  <span
+                    className={`text-xs font-mono uppercase ${
+                      isDark ? "text-gray-300" : "text-gray-700"
+                    }`}
+                  >
                     {language || "code"}
                   </span>
                   <button
                     onClick={() => copyToClipboard(code, codeId)}
-                    className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
+                    className={`flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors ${
+                      isDark
+                        ? "text-gray-400 hover:text-white hover:bg-white/10"
+                        : "text-gray-600 hover:text-gray-900 hover:bg-black/5"
+                    }`}
                     title="Copy code"
                   >
                     {copiedCode === codeId ? (
                       <>
-                        <Check className="h-3.5 w-3.5 text-green-400" />
-                        <span className="text-green-400">Copied</span>
+                        <Check className="h-3.5 w-3.5 text-green-500" />
+                        <span className="text-green-500">Copied</span>
                       </>
                     ) : (
                       <>

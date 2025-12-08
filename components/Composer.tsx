@@ -122,7 +122,7 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
   }
 
   return (
-    <div className="border-t-4 border-[#552814] dark:border-[#3d2f1f] p-4 bg-[#F2E6C2] dark:bg-[#1f2433]">
+    <div className="border-t-4 border-[#552814] dark:border-[#3d2f1f] p-4 bg-[#F2E6C2] dark:bg-[#1a1f2e]">
       <div className="mx-auto flex flex-col inventory-slot rounded-lg p-3 max-w-3xl">
         <div className="flex-1 relative">
           <textarea
@@ -134,7 +134,7 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
             placeholder="What would you like to do today?"
             rows={1}
             className={cls(
-              "w-full resize-none bg-transparent text-sm outline-none placeholder:text-[#A05030]/60 transition-all duration-200",
+              "w-full resize-none bg-transparent text-sm outline-none placeholder:text-[#A05030]/60 dark:placeholder:text-[#8B7355]/60 transition-all duration-200",
               "px-0 py-2 min-h-10 text-left text-[#451806] dark:text-[#F2E6C2]"
             )}
             style={{
@@ -154,7 +154,7 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
           <div className="flex items-center gap-1">
             <ComposerActionsPopover>
               <button
-                className="inline-flex shrink-0 items-center justify-center rounded p-2 text-[#A05030] hover:bg-[#C78F56]/20 hover:text-[#552814] transition-colors"
+                className="inline-flex shrink-0 items-center justify-center rounded p-2 text-[#A05030] dark:text-[#C78F56] hover:bg-[#C78F56]/20 hover:text-[#552814] dark:hover:text-[#F2E6C2] transition-colors"
                 title="Add attachment"
               >
                 <Plus className="h-4 w-4" />
@@ -197,7 +197,7 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
 
           <div className="flex items-center gap-1 shrink-0">
             <button
-              className="inline-flex items-center justify-center rounded p-2 text-[#A05030] hover:bg-[#C78F56]/20 hover:text-[#552814] transition-colors"
+              className="inline-flex items-center justify-center rounded p-2 text-[#A05030] dark:text-[#C78F56] hover:bg-[#C78F56]/20 hover:text-[#552814] dark:hover:text-[#F2E6C2] transition-colors"
               title="Voice input"
             >
               <Mic className="h-4 w-4" />
@@ -221,7 +221,7 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
         </div>
       </div>
 
-      <div className="mx-auto mt-2 max-w-3xl px-1 text-[11px] text-[#A05030] dark:text-[#6B4423]">
+      <div className="mx-auto mt-2 max-w-3xl px-1 text-[11px] text-[#A05030] dark:text-[#8B7355]">
         Press{" "}
         <kbd className="inventory-slot rounded px-1.5 py-0.5 text-[10px]">
           Enter

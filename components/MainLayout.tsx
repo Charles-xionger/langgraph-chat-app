@@ -5,8 +5,8 @@ import Header from "./Header";
 import { ThreadList } from "./ThreadList";
 import GhostIconButton from "./GhostIconButton";
 import { Calendar, LayoutGrid, MoreHorizontal } from "lucide-react";
-import ThemeToggle from "./ThemeToggle";
 import Junimo from "./Junimo";
+import SearchModal from "./SearchModal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,7 +54,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   }, [threadToDelete]);
 
   return (
-    <main className="h-screen w-full bg-[#FFFAE6] text-[#451806] dark:bg-[#E8DCC0] dark:text-[#2C1810]">
+    <main className="h-screen w-full bg-[#FFFAE6] text-[#451806] dark:bg-[#1a1f2e] dark:text-[#F2E6C2]">
       {/* Mobile header */}
       <div className="md:hidden sticky top-0 z-40 flex items-center gap-2 stardew-box px-3 py-2">
         <div className="ml-1 flex items-center gap-2 text-sm font-bold tracking-tight pixel-text">
@@ -70,7 +70,6 @@ export function MainLayout({ children }: MainLayoutProps) {
           <GhostIconButton label="More">
             <MoreHorizontal className="h-4 w-4" />
           </GhostIconButton>
-          <ThemeToggle />
         </div>
       </div>
       {/* Sidebar */}
@@ -100,6 +99,12 @@ export function MainLayout({ children }: MainLayoutProps) {
           <Junimo color="green" />
         </div>
       </div>
+
+      {/* Search Modal */}
+      <SearchModal
+        open={showSearchModal}
+        onClose={() => setShowSearchModal(false)}
+      />
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

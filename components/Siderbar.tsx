@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import SettingsPopover from "./SettingsPopover";
-import ThemeToggle from "./ThemeToggle";
 import { useRouter } from "next/navigation";
 import { useCreateThread } from "@/app/api/agent/server-store";
 import { Thread } from "@/types/message";
@@ -147,7 +146,7 @@ const SidebarComponent: React.FC<SidebarProps> = ({
             <div className="flex items-center gap-2 border-b-4 border-[#552814] dark:border-[#8B6F47] px-3 py-3">
               <div className="flex items-center gap-2">
                 <StardewStar />
-                <div className="text-base font-bold tracking-tight pixel-text text-[#451806] dark:text-[#2C1810]">
+                <div className="text-base font-bold tracking-tight pixel-text text-[#451806] dark:text-[#F2E6C2]">
                   Stardew Assistant
                 </div>
               </div>
@@ -177,14 +176,14 @@ const SidebarComponent: React.FC<SidebarProps> = ({
                 Search conversations
               </label>
               <div className="relative">
-                <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B4423] dark:text-[#6B4423]" />
+                <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B4423] dark:text-[#8B7355]" />
                 <input
                   id="search"
                   type="text"
                   placeholder="Search the valley..."
                   onClick={() => setShowSearchModal(true)}
                   onFocus={() => setShowSearchModal(true)}
-                  className="w-full inventory-slot rounded py-2 pl-9 pr-3 text-sm outline-none placeholder:text-[#6B4423]/70 dark:placeholder:text-[#6B4423]/70 focus:ring-2 focus:ring-[#9A55FF] bg-[#FFFAE6] dark:bg-[#F5EDD6] text-[#451806] dark:text-[#2C1810]"
+                  className="w-full inventory-slot rounded py-2 pl-9 pr-3 text-sm outline-none placeholder:text-[#6B4423]/70 dark:placeholder:text-[#8B7355]/70 focus:ring-2 focus:ring-[#9A55FF] bg-[#FFFAE6] dark:bg-[#2a2f3e] text-[#451806] dark:text-[#F2E6C2]"
                 />
               </div>
             </div>
@@ -213,24 +212,25 @@ const SidebarComponent: React.FC<SidebarProps> = ({
             <div className="mt-auto border-t-4 border-[#552814] dark:border-[#8B6F47] px-3 py-3">
               <div className="flex items-center gap-2">
                 <SettingsPopover>
-                  <button className="inline-flex items-center gap-2 rounded px-2 py-2 text-sm hover:bg-[#C78F56]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9A55FF] text-[#451806] dark:text-[#2C1810]">
+                  <button className="inline-flex items-center gap-2 rounded px-2 py-2 text-sm hover:bg-[#C78F56]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9A55FF] text-[#451806] dark:text-[#F2E6C2]">
                     <Settings className="h-4 w-4" /> Settings
                   </button>
                 </SettingsPopover>
-                <div className="ml-auto">
-                  <ThemeToggle />
-                </div>
               </div>
               {/* User profile */}
               <div className="mt-2 flex items-center gap-2 inventory-slot rounded p-2">
-                <div className="grid h-8 w-8 place-items-center rounded-full bg-[#5DCC52] text-xs font-bold text-white">
-                  FE
+                <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-[#FFD700] shadow-sm">
+                  <img
+                    src="/Jack 'O' Lantern.png"
+                    alt="Farmer"
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-bold text-[#451806] dark:text-[#2C1810]">
+                  <div className="truncate text-sm font-bold text-[#451806] dark:text-[#F2E6C2]">
                     Farmer
                   </div>
-                  <div className="truncate text-xs text-[#6B4423] dark:text-[#6B4423]">
+                  <div className="truncate text-xs text-[#6B4423] dark:text-[#8B7355]">
                     Pelican Town
                   </div>
                 </div>

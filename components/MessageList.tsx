@@ -76,7 +76,7 @@ export const MessageList = ({
                   className="w-16 h-16 object-contain mx-auto"
                 />
               </div>
-              <p className="text-[#A05030] pixel-text-sm">
+              <p className="text-[#A05030] dark:text-[#C78F56] pixel-text-sm">
                 Start a conversation by sending a message
               </p>
             </div>
@@ -108,23 +108,26 @@ export const MessageList = ({
                 >
                   {message.type !== "human" && (
                     <div className="mt-0.5 shrink-0">
-                      <img
-                        src="/junimo.png"
-                        alt="Junimo"
-                        className="w-8 h-8 object-contain"
-                      />
+                      <div className="relative">
+                        <img
+                          src="/junimo.png"
+                          alt="Junimo"
+                          className="w-8 h-8 object-contain"
+                        />
+                        <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-[#5DCC52] rounded-full border border-[#FFFAE6] dark:border-[#1a1f2e]"></div>
+                      </div>
                     </div>
                   )}
                   <div
-                    className={`max-w-[80%] px-4 py-3 text-sm ${
+                    className={`max-w-[80%] ${
                       message.type === "human"
-                        ? "stardew-btn rounded-tl-xl rounded-tr-xl rounded-bl-xl rounded-br-sm"
+                        ? "stardew-box rounded-2xl px-4 py-3 border-2 border-[#FFD700] shadow-sm"
                         : message.type === "error"
-                        ? "bg-destructive text-destructive-foreground rounded-lg"
+                        ? "stardew-box rounded-lg px-4 py-3 border-2 border-red-600 dark:border-red-500"
                         : message.type === "tool" ||
                           (hasPendingToolCalls && !hasContent)
                         ? "" // 工具卡片自带样式，不需要额外背景
-                        : "inventory-slot rounded-tl-xl rounded-tr-xl rounded-bl-sm rounded-br-xl text-[#451806]"
+                        : "stardew-box rounded-2xl px-4 py-3"
                     }`}
                   >
                     {message.type === "tool" ? (
@@ -142,14 +145,20 @@ export const MessageList = ({
                         ))}
                       </div>
                     ) : (
-                      <div className="text-sm">
+                      <div className="text-sm text-[--stardew-text] dark:text-[--stardew-parchment]">
                         <MessageContent message={message} />
                       </div>
                     )}
                   </div>
                   {message.type === "human" && (
-                    <div className="mt-0.5 grid h-8 w-8 place-items-center rounded-full bg-[#4A90D9] text-[10px] font-bold text-white border-2 border-[#552814]">
-                      FE
+                    <div className="mt-0.5 shrink-0">
+                      <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-[#FFD700] shadow-sm inventory-slot">
+                        <img
+                          src="/Jack 'O' Lantern.png"
+                          alt="User"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -171,13 +180,13 @@ export const MessageList = ({
                 <div className="h-2.5 w-2.5 junimo-bounce rounded-full bg-[#FFD700] [animation-delay:-0.15s]"></div>
                 <div className="h-2.5 w-2.5 junimo-bounce rounded-full bg-[#9A55FF]"></div>
               </div>
-              <span className="pixel-text-sm text-[#A05030]">
+              <span className="pixel-text-sm text-[#A05030] dark:text-[#C78F56]">
                 Junimo is thinking...
               </span>
               {onCancelThinking && (
                 <button
                   onClick={onCancelThinking}
-                  className="ml-2 inline-flex items-center gap-1 stardew-box rounded px-2 py-1 text-xs text-[#A05030] hover:bg-[#C78F56]/20"
+                  className="ml-2 inline-flex items-center gap-1 stardew-box rounded px-2 py-1 text-xs text-[#A05030] dark:text-[#C78F56] hover:bg-[#C78F56]/20"
                 >
                   <Square className="h-3 w-3" /> Pause
                 </button>

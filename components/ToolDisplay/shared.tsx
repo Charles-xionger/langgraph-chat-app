@@ -15,12 +15,12 @@ export const GenericToolCallCard = ({
   args,
 }: GenericToolCallCardProps) => {
   return (
-    <div className="rounded-lg border border-border/50 bg-muted/50 p-3">
-      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+    <div className="stardew-box rounded-lg p-3">
+      <div className="flex items-center gap-2 text-xs font-medium text-[--stardew-wood] dark:text-[--stardew-wood-light]">
         <Wrench className="h-3.5 w-3.5" />
-        <span>调用工具: {name}</span>
+        <span>🔧 调用工具: {name}</span>
       </div>
-      <pre className="mt-2 overflow-x-auto rounded bg-background/50 p-2 text-xs text-muted-foreground">
+      <pre className="mt-2 overflow-x-auto rounded inventory-slot p-2 text-xs text-[--stardew-text] dark:text-[--stardew-parchment] font-mono">
         {JSON.stringify(args, null, 2)}
       </pre>
     </div>
@@ -47,12 +47,12 @@ export const GenericToolResultCard = ({
   }
 
   return (
-    <div className="rounded-lg border border-green-200/60 bg-green-50/50 p-3 dark:border-green-800/40 dark:bg-green-950/30">
-      <div className="flex items-center gap-2 text-xs font-medium text-green-600 dark:text-green-400">
+    <div className="stardew-box rounded-lg p-3 border-2 border-[#5DCC52] dark:border-[#5DCC52]/70">
+      <div className="flex items-center gap-2 text-xs font-medium text-[#5DCC52]">
         <CheckCircle className="h-3.5 w-3.5" />
-        <span>{name} 执行完成</span>
+        <span>✅ {name} 执行完成</span>
       </div>
-      <pre className="mt-2 overflow-x-auto rounded bg-green-100/30 p-2 text-xs text-green-700 dark:bg-green-900/20 dark:text-green-300">
+      <pre className="mt-2 overflow-x-auto rounded inventory-slot p-2 text-xs text-[--stardew-text] dark:text-[--stardew-parchment] font-mono">
         {displayContent}
       </pre>
     </div>

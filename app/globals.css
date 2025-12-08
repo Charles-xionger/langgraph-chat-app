@@ -257,10 +257,12 @@
   .dark .inventory-slot {
     background: linear-gradient(
       135deg,
-      var(--stardew-parchment) 0%,
-      #e8dcc0 100%
+      hsl(220, 20%, 22%) 0%,
+      hsl(220, 20%, 18%) 100%
     );
-    border-color: var(--stardew-wood-dark);
+    border-color: hsl(35, 40%, 30%);
+    box-shadow: inset 2px 2px 0px rgba(255, 255, 255, 0.1),
+      inset -2px -2px 0px hsl(35, 40%, 15%);
   }
 
   .dark .inventory-slot.active {
