@@ -34,9 +34,18 @@ export async function GET() {
  * @returns 新创建的线程的 JSON 响应
  */
 export async function POST() {
+  // 生成友好的时间标题
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const title = `对话 ${timeStr}`;
+
   const createdThread = await prisma.thread.create({
     data: {
-      title: "New Thread",
+      title,
     },
   });
 

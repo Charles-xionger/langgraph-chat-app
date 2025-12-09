@@ -143,6 +143,10 @@ export function useStreamedMessages(threadId?: string) {
           setIsSending(false);
           setIsReceiving(false);
           currentMessageRef.current = null;
+
+          // 刷新线程列表，以获取可能更新的标题
+          queryClient.invalidateQueries({ queryKey: ["threads"] });
+
           try {
             stream.close();
           } catch {}
