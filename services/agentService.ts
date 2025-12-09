@@ -158,6 +158,7 @@ export async function streamResponse(params: {
       // 处理工具调用片段 (tool_call_chunks)
       const toolCallChunks = aiMessage.tool_call_chunks;
       if (toolCallChunks && toolCallChunks.length > 0) {
+        let hasNewToolCall = false;
         for (const tchunk of toolCallChunks) {
           const { index, id, name, args } = tchunk;
           const idx = index ?? 0;
@@ -168,6 +169,7 @@ export async function streamResponse(params: {
               name: name || "",
               args: args || "",
             });
+            hasNewToolCall = true;
           } else {
             const acc = toolCallAccumulators.get(idx)!;
             if (id) acc.id = id;
@@ -175,7 +177,20 @@ export async function streamResponse(params: {
             acc.args += args || "";
           }
         }
-        // 不在这里 yield，等累积完成后再发送
+
+        // 实时发送工具调用信息，让前端知道正在执行什么工具
+        if (toolCallAccumulators.size > 0) {
+          const currentToolCalls =
+            buildCompletedToolCalls(toolCallAccumulators);
+          yield {
+            type: "ai",
+            data: {
+              id: currentAIMessageId || Date.now().toString(),
+              content: "",
+              tool_calls: currentToolCalls,
+            },
+          };
+        }
         continue;
       }
 
