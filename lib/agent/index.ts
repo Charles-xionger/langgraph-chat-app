@@ -5,6 +5,7 @@ import { ChatOpenAI, OpenAIEmbeddings } from "@langchain/openai";
 import { SYSTEM_PROMPT } from "./prompt";
 import { getInternalTools } from "./tools";
 import { DynamicTool } from "langchain";
+import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
 // 用来标记是否已经开始设置
 let setupPromise: Promise<void> | null = null;
@@ -29,11 +30,49 @@ async function setupOnce() {
  *
  * TODO 后期可进行扩展
  */
-function createChatModel() {
-  return new ChatOpenAI({
-    modelName: "gpt-4.1",
-    temperature: 0,
-  });
+
+interface ChatModelOptions {
+  provider?: string;
+  model?: string;
+  temperature?: number;
+}
+function createChatModel({
+  provider = "openai",
+  model,
+  temperature = 1,
+}: ChatModelOptions) {
+  switch (provider) {
+    case "aliyun":
+      // TODO 阿里云模型支持
+      return new ChatOpenAI({
+        model,
+        temperature,
+        openAIApiKey: process.env.ALIYUN_API_KEY,
+
+        configuration: {
+          baseURL: process.env.ALIYUN_INTL_BASE_URL,
+        },
+      });
+    case "openai":
+      return new ChatOpenAI({
+        modelName: "gpt-4.1",
+        temperature: temperature,
+      });
+
+    case "gemini":
+      return new ChatGoogleGenerativeAI({
+        model: process.env.GOOGLE_MODEL_NAME || "gemini-3-pro-image-preview",
+        apiKey: process.env.GOOGLE_API_KEY,
+        temperature: 0.7,
+        streaming: true, // 启用流式响应
+      });
+    default:
+      return new ChatOpenAI({
+        modelName: "gpt-4.1",
+        temperature: temperature,
+      });
+      break;
+  }
 }
 
 function createEmbeddingsModel() {
@@ -50,18 +89,20 @@ function createEmbeddingsModel() {
  */
 
 export async function createAgent(config?: AgentConfigOptions) {
+  const provider = config?.provider || "openai";
+  const model =
+    config?.model ||
+    (provider === "aliyun" ? process.env.ALIYUN_MODEL_NAME : "gpt-4.1");
+  const llm = createChatModel({ provider, model });
+
   // TODO MCP Tools
   const mcptools: DynamicTool[] = [];
 
   // 内置工具
-  const internalTools = getInternalTools(
-    createChatModel(),
-    createEmbeddingsModel()
-  );
+  const internalTools = getInternalTools(llm, createEmbeddingsModel());
 
   const allTools = [...internalTools, ...mcptools] as DynamicTool[];
 
-  const llm = createChatModel();
   const agent = new AgentBuilder({
     llm,
     tools: allTools,

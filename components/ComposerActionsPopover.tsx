@@ -35,7 +35,7 @@ export default function ComposerActionsPopover({
     {
       icon: Paperclip,
       label: "Add photos & files",
-      color: "text-[#A05030] dark:text-[#6B4423]",
+      color: "text-[#A05030]",
       action: () => console.log("Add photos & files"),
     },
     {
@@ -141,7 +141,7 @@ export default function ComposerActionsPopover({
                   <button
                     key={index}
                     onClick={() => handleAction(action.action)}
-                    className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-[#C78F56]/20 rounded text-[#451806] dark:text-[#2C1810]"
+                    className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-[#C78F56]/20 dark:hover:bg-[#C78F56]/10 rounded transition-colors"
                   >
                     <IconComponent
                       className={`h-4 w-4 ${action.color || ""}`}
@@ -157,17 +157,17 @@ export default function ComposerActionsPopover({
               })}
               <button
                 onClick={handleMoreClick}
-                className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-[#C78F56]/20 rounded inventory-slot text-[#451806] dark:text-[#2C1810]"
+                className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-[#C78F56]/20 dark:hover:bg-[#C78F56]/10 rounded inventory-slot transition-colors"
               >
-                <MoreHorizontal className="h-4 w-4 text-[#A05030] dark:text-[#6B4423]" />
+                <MoreHorizontal className="h-4 w-4 text-[#A05030]" />
                 <span>More</span>
-                <ChevronRight className="h-4 w-4 ml-auto text-[#A05030] dark:text-[#6B4423]" />
+                <ChevronRight className="h-4 w-4 ml-auto text-[#A05030]" />
               </button>
             </div>
           </div>
         ) : (
           <div className="flex">
-            <div className="flex-1 p-3 border-r-4 border-[#552814] dark:border-[#3d2f1f]">
+            <div className="flex-1 p-3 border-r-4 border-[#552814]">
               <div className="space-y-1">
                 {mainActions.map((action, index) => {
                   const IconComponent = action.icon;
@@ -175,7 +175,7 @@ export default function ComposerActionsPopover({
                     <button
                       key={index}
                       onClick={() => handleAction(action.action)}
-                      className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-[#C78F56]/20 rounded text-[#451806] dark:text-[#2C1810]"
+                      className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-[#C78F56]/20 dark:hover:bg-[#C78F56]/10 rounded transition-colors"
                     >
                       <IconComponent
                         className={`h-4 w-4 ${action.color || ""}`}
@@ -191,11 +191,11 @@ export default function ComposerActionsPopover({
                 })}
                 <button
                   onClick={handleMoreClick}
-                  className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-[#C78F56]/20 rounded inventory-slot text-[#451806] dark:text-[#2C1810]"
+                  className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-[#C78F56]/20 dark:hover:bg-[#C78F56]/10 rounded inventory-slot transition-colors"
                 >
-                  <MoreHorizontal className="h-4 w-4 text-[#A05030] dark:text-[#6B4423]" />
+                  <MoreHorizontal className="h-4 w-4 text-[#A05030]" />
                   <span>More</span>
-                  <ChevronRight className="h-4 w-4 ml-auto text-[#A05030] dark:text-[#6B4423]" />
+                  <ChevronRight className="h-4 w-4 ml-auto text-[#A05030]" />
                 </button>
               </div>
             </div>
@@ -207,7 +207,7 @@ export default function ComposerActionsPopover({
                     <button
                       key={index}
                       onClick={() => handleAction(action.action)}
-                      className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-[#C78F56]/20 rounded text-[#451806] dark:text-[#2C1810]"
+                      className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-[#C78F56]/20 dark:hover:bg-[#C78F56]/10 rounded transition-colors"
                     >
                       {typeof IconComponent === "function" &&
                       IconComponent.length === 0 ? (

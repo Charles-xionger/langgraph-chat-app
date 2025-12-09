@@ -82,5 +82,13 @@ export async function createMessageStream(
     content: message,
   });
 
+  // 添加可选的模型配置参数
+  if (opts?.provider) {
+    queryParams.append("provider", opts.provider);
+  }
+  if (opts?.model) {
+    queryParams.append("model", opts.model);
+  }
+
   return new EventSource(`${API_BASE_URL}/stream?${queryParams.toString()}`);
 }

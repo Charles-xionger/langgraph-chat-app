@@ -9,6 +9,15 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const threadId = searchParams.get("threadId");
   const userContent = searchParams.get("content");
+  const provider = searchParams.get("provider");
+  const model = searchParams.get("model");
+
+  console.log("Stream GET request received:", {
+    threadId,
+    userContent,
+    provider,
+    model,
+  });
 
   if (!threadId || typeof userContent !== "string") {
     return NextResponse.json(
@@ -50,7 +59,10 @@ export async function GET(request: NextRequest) {
           const iterable = await streamResponse({
             threadId,
             userText: userContent,
-            opts: {},
+            opts: {
+              provider: provider || undefined,
+              model: model || undefined,
+            },
           });
 
           for await (const chunk of iterable) {
@@ -113,7 +125,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const body = await request.json();
 
-  const { threadId, content: userContent } = body || {};
+  const { threadId, content: userContent, provider, model } = body || {};
 
   if (!threadId || typeof userContent !== "string") {
     return NextResponse.json(
@@ -155,7 +167,10 @@ export async function POST(request: NextRequest) {
           const iterable = await streamResponse({
             threadId,
             userText: userContent,
-            opts: {},
+            opts: {
+              provider: provider || undefined,
+              model: model || undefined,
+            },
           });
 
           for await (const chunk of iterable) {

@@ -66,10 +66,37 @@ export const ThreadList = ({ onDeleteRequest }: ThreadListProps) => {
     threadTitle: string
   ) => {
     onDeleteRequest(threadId, threadTitle, () => {
-      deleteThreadMutation.mutate(threadId);
-      // 如果删除的是当前线程，跳转到首页
-      if (threadId === currentThreadId) {
-        router.push("/");
+      // 如果删除的是当前线程，需要跳转到其他线程
+      if (threadId === currentThreadId && threads) {
+        // 找到要删除的线程在列表中的索引
+        const currentIndex = threads.findIndex((t) => t.id === threadId);
+
+        // 先尝试跳转到下一个线程，如果没有则跳转到上一个，都没有则跳转首页
+        let nextThreadId: string | null = null;
+
+        if (currentIndex !== -1) {
+          // 如果有下一个线程，跳转到下一个
+          if (currentIndex < threads.length - 1) {
+            nextThreadId = threads[currentIndex + 1].id;
+          }
+          // 否则跳转到上一个
+          else if (currentIndex > 0) {
+            nextThreadId = threads[currentIndex - 1].id;
+          }
+        }
+
+        // 执行删除
+        deleteThreadMutation.mutate(threadId);
+
+        // 跳转到新线程或首页
+        if (nextThreadId) {
+          router.push(`/thread/${nextThreadId}`);
+        } else {
+          router.push("/");
+        }
+      } else {
+        // 如果删除的不是当前线程，直接删除
+        deleteThreadMutation.mutate(threadId);
       }
     });
   };

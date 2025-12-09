@@ -26,6 +26,11 @@ export default function ChatPane({
   const firstMessageInitiatedRef = useRef(false);
   const [awaitingFirstResponse, setAwaitingFirstResponse] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
+  const [selectedModel, setSelectedModel] = useState("GPT-4.1");
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+  const [selectedModelId, setSelectedModelId] = useState<string | undefined>(
+    "gpt-4.1"
+  );
   const { data: threads } = useGetThreads();
   const { data: messages, isLoading: isLoadingHistory } =
     useHistoryMessages(threadId);
@@ -54,7 +59,14 @@ export default function ChatPane({
       setIsThinking(true);
     }
 
-    await sendMessage(message, opts);
+    // 合并模型配置
+    const finalOpts: MessageOptions = {
+      ...opts,
+      provider: selectedProvider || opts?.provider,
+      model: selectedModelId || opts?.model,
+    };
+
+    await sendMessage(message, finalOpts);
 
     if (isNotEmpty) {
       firstMessageInitiatedRef.current = true;
@@ -66,6 +78,17 @@ export default function ChatPane({
   const handlePauseThinking = () => {
     cancel();
     setIsThinking(false);
+  };
+
+  // 处理模型切换
+  const handleModelChange = (
+    modelName: string,
+    provider: string | null,
+    modelId?: string
+  ) => {
+    setSelectedModel(modelName);
+    setSelectedProvider(provider);
+    setSelectedModelId(modelId);
   };
 
   useEffect(() => {
@@ -102,7 +125,7 @@ export default function ChatPane({
 
   if (isLoadingHistory) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-[#F2E6C2]">
+      <div className="flex h-full w-full items-center justify-center stardew-box">
         <div className="flex flex-col items-center gap-4">
           <div className="flex items-center gap-2">
             <Junimo color="green" delay={0} />
@@ -149,7 +172,12 @@ export default function ChatPane({
       </div>
 
       {/* Composer input */}
-      <Composer onSend={handleSendMessage} busy={isSending && !isReceiving} />
+      <Composer
+        onSend={handleSendMessage}
+        busy={isSending && !isReceiving}
+        selectedModel={selectedModel}
+        onModelChange={handleModelChange}
+      />
     </div>
   );
 }

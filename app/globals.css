@@ -298,6 +298,15 @@
     background: hsl(35, 45%, 35%);
     border-color: hsl(35, 40%, 25%);
   }
+
+  /* Stardew Valley 风格的文本输入框 */
+  .stardew-input {
+    caret-color: var(--stardew-wood-dark);
+  }
+
+  .dark .stardew-input {
+    caret-color: var(--stardew-gold);
+  }
 }
 
 /* Junimo bounce animation */

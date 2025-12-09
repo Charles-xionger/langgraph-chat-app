@@ -8,6 +8,7 @@ import {
   BookOpen,
   LogOut,
   ChevronRight,
+  Wrench,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { ReactNode } from "react";
@@ -62,6 +63,12 @@ export default function SettingsPopover({ children }: { children: ReactNode }) {
             <button className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-[#C78F56]/20 dark:hover:bg-[#C78F56]/10 rounded transition-colors text-[--stardew-text] dark:text-[--stardew-parchment]">
               <Globe className="h-4 w-4 text-[#4FC3F7]" />
               <span>🌍 Language</span>
+              <ChevronRight className="h-4 w-4 ml-auto text-[--stardew-wood] dark:text-[--stardew-wood-light]" />
+            </button>
+
+            <button className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-[#C78F56]/20 dark:hover:bg-[#C78F56]/10 rounded transition-colors text-[--stardew-text] dark:text-[--stardew-parchment]">
+              <Wrench className="h-4 w-4 text-[--stardew-wood]" />
+              <span>🔧 MCP Tools</span>
               <ChevronRight className="h-4 w-4 ml-auto text-[--stardew-wood] dark:text-[--stardew-wood-light]" />
             </button>
 
