@@ -25,18 +25,18 @@ export const CHATBOT_MODELS: ChatbotModel[] = [
   {
     name: "Gemini",
     icon: "💎",
-    provider: MODEL_PROVIDER.GEMINI, // 暂未配置
+    provider: MODEL_PROVIDER.GEMINI,
   },
   {
     name: "GPT-4.1",
     icon: "🌟",
-    provider: MODEL_PROVIDER.OPENAI,
+    provider: null, // 暂时禁用
     model: "gpt-4.1",
   },
   {
     name: "qianwen",
     icon: "🌸",
-    provider: MODEL_PROVIDER.ALIYUN,
+    provider: null, // 暂时禁用
     model:
       typeof window !== "undefined"
         ? process.env.NEXT_PUBLIC_ALIYUN_MODEL_NAME || "qwen-turbo"
@@ -45,6 +45,6 @@ export const CHATBOT_MODELS: ChatbotModel[] = [
   {
     name: "Claude Sonnet 4",
     icon: "🎵",
-    provider: null, // 暂未配置
+    provider: null, // 暂时禁用
   },
 ];
