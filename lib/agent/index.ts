@@ -41,6 +41,8 @@ function createChatModel({
   model,
   temperature = 1,
 }: ChatModelOptions) {
+  console.log("Creating chat model:", { provider, model });
+
   switch (provider) {
     case "aliyun":
       // TODO 阿里云模型支持
@@ -60,6 +62,7 @@ function createChatModel({
       });
 
     case "gemini":
+      console.log("Using Gemini model");
       return new ChatGoogleGenerativeAI({
         model: process.env.GOOGLE_MODEL_NAME || "gemini-3-pro-image-preview",
         apiKey: process.env.GOOGLE_API_KEY,

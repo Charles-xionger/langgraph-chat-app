@@ -26,6 +26,7 @@ export const CHATBOT_MODELS: ChatbotModel[] = [
     name: "Gemini",
     icon: "💎",
     provider: MODEL_PROVIDER.GEMINI,
+    model: "gemini-3-pro-preview",
   },
   {
     name: "GPT-4.1",

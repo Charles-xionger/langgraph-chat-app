@@ -31,7 +31,7 @@ export async function streamResponse(params: {
   userText: string;
   opts?: MessageOptions;
 }) {
-  const { threadId, userText } = params;
+  const { threadId, userText, opts } = params;
 
   // 确保 threadID 存在
   await ensureThread(threadId, userText);
@@ -42,7 +42,10 @@ export async function streamResponse(params: {
   };
 
   // TODO 多模型、多agent 工具调用支持
-  const agent = await ensureAgent();
+  const agent = await ensureAgent({
+    provider: opts?.provider,
+    model: opts?.model,
+  });
 
   const inerable = await agent.stream(inputs, {
     streamMode: "messages", // 使用 messages 模式获取流式 token
@@ -94,7 +97,7 @@ export async function streamResponse(params: {
     for await (const chunk of inerable) {
       if (!chunk) continue;
 
-      console.log("🚀 ~ generator ~ chunk:", chunk);
+      // console.log("🚀 ~ generator ~ chunk:", chunk);
 
       // streamMode: "messages" 返回的是 [message, metadata] 格式
       if (!Array.isArray(chunk) || chunk.length < 1) continue;

@@ -12,6 +12,7 @@ import { MessageOptions } from "@/types/message";
 import { MessageList } from "./MessageList";
 import Composer from "./Composer";
 import Junimo from "./Junimo";
+import { CHATBOT_MODELS } from "@/lib/constants";
 
 interface ChatPaneProps {
   threadId: string;
@@ -26,10 +27,15 @@ export default function ChatPane({
   const firstMessageInitiatedRef = useRef(false);
   const [awaitingFirstResponse, setAwaitingFirstResponse] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("GPT-4.1");
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+
+  // 获取默认模型配置（第一个模型）
+  const defaultModel = CHATBOT_MODELS[0];
+  const [selectedModel, setSelectedModel] = useState(defaultModel.name);
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(
+    defaultModel.provider
+  );
   const [selectedModelId, setSelectedModelId] = useState<string | undefined>(
-    "gpt-4.1"
+    defaultModel.model
   );
   const { data: threads } = useGetThreads();
   const { data: messages, isLoading: isLoadingHistory } =

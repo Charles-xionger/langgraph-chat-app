@@ -176,8 +176,14 @@ export const MessageList = ({
             </div>
             <div className="flex items-center gap-3 inventory-slot rounded-lg px-4 py-2">
               <div className="flex items-center gap-1">
-                <div className="h-2.5 w-2.5 junimo-bounce rounded-full bg-[#5DCC52] [animation-delay:-0.3s]"></div>
-                <div className="h-2.5 w-2.5 junimo-bounce rounded-full bg-[#FFD700] [animation-delay:-0.15s]"></div>
+                <div
+                  className="h-2.5 w-2.5 junimo-bounce rounded-full bg-[#5DCC52]"
+                  style={{ animationDelay: "-0.3s" }}
+                ></div>
+                <div
+                  className="h-2.5 w-2.5 junimo-bounce rounded-full bg-[#FFD700]"
+                  style={{ animationDelay: "-0.15s" }}
+                ></div>
                 <div className="h-2.5 w-2.5 junimo-bounce rounded-full bg-[#9A55FF]"></div>
               </div>
               <span className="pixel-text-sm text-[#A05030] dark:text-[#C78F56]">
