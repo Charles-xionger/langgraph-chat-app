@@ -6,6 +6,7 @@ import { SYSTEM_PROMPT } from "./prompt";
 import { getInternalTools } from "./tools";
 import { DynamicTool } from "langchain";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { ChatAlibabaTongyi } from "@langchain/community/chat_models/alibaba_tongyi";
 
 // 用来标记是否已经开始设置
 let setupPromise: Promise<void> | null = null;
@@ -45,14 +46,12 @@ function createChatModel({
 
   switch (provider) {
     case "aliyun":
-      // TODO 阿里云模型支持
       return new ChatOpenAI({
         model,
         temperature,
-        openAIApiKey: process.env.ALIYUN_API_KEY,
-
+        apiKey: process.env.ALIYUN_API_KEY,
         configuration: {
-          baseURL: process.env.ALIYUN_INTL_BASE_URL,
+          baseURL: process.env.ALIYUN_BASE_URL,
         },
       });
     case "openai":

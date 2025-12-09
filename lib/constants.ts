@@ -23,12 +23,6 @@ export interface ChatbotModel {
 
 export const CHATBOT_MODELS: ChatbotModel[] = [
   {
-    name: "Gemini",
-    icon: "💎",
-    provider: MODEL_PROVIDER.GEMINI,
-    model: "gemini-3-pro-preview",
-  },
-  {
     name: "GPT-4.1",
     icon: "🌟",
     provider: MODEL_PROVIDER.OPENAI, // 暂时禁用
@@ -42,6 +36,12 @@ export const CHATBOT_MODELS: ChatbotModel[] = [
       typeof window !== "undefined"
         ? process.env.NEXT_PUBLIC_ALIYUN_MODEL_NAME || "qwen-turbo"
         : "qwen-turbo",
+  },
+  {
+    name: "Gemini",
+    icon: "💎",
+    provider: MODEL_PROVIDER.GEMINI,
+    model: "gemini-3-pro-preview",
   },
   {
     name: "Claude Sonnet 4",
