@@ -31,13 +31,13 @@ export const CHATBOT_MODELS: ChatbotModel[] = [
   {
     name: "GPT-4.1",
     icon: "🌟",
-    provider: null, // 暂时禁用
+    provider: MODEL_PROVIDER.OPENAI, // 暂时禁用
     model: "gpt-4.1",
   },
   {
     name: "qianwen",
     icon: "🌸",
-    provider: null, // 暂时禁用
+    provider: MODEL_PROVIDER.ALIYUN, // 暂时禁用
     model:
       typeof window !== "undefined"
         ? process.env.NEXT_PUBLIC_ALIYUN_MODEL_NAME || "qwen-turbo"

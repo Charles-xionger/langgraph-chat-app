@@ -208,9 +208,18 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
               overflowY: lineCount > 12 ? "auto" : "hidden",
             }}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
+              if (e.key === "Enter") {
+                // 如果正在录音，按回车直接发送（不需要 Shift）
+                if (isRecording) {
+                  e.preventDefault();
+                  handleSend();
+                }
+                // 如果没有录音，按回车+Shift 换行，单独回车发送
+                else if (!e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+                // Shift+Enter 换行（默认行为，不需要处理）
               }
             }}
           />
@@ -316,7 +325,11 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
       <div className="mx-auto mt-2 max-w-3xl px-1 text-[11px] text-[#A05030] dark:text-[#8B7355]">
         {isRecording ? (
           <span className="text-red-500 dark:text-red-400 animate-pulse">
-            🎙️ 正在录音... 点击麦克风停止
+            🎙️ 正在录音... 按{" "}
+            <kbd className="inventory-slot rounded px-1.5 py-0.5 text-[10px]">
+              Enter
+            </kbd>{" "}
+            发送或点击麦克风停止
           </span>
         ) : isProcessing ? (
           <span className="text-[--stardew-purple]">⏳ 正在处理语音...</span>
