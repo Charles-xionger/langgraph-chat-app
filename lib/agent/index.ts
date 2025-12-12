@@ -110,7 +110,7 @@ export async function createAgent(config?: AgentConfigOptions) {
     tools: allTools,
     prompt: config?.systemPrompt || SYSTEM_PROMPT,
     checkpointer: postgresCheckpointer,
-  }).build();
+  }).buildWithApproval(); // 使用带审批功能的构建方法，支持工具调用审批
 
   return agent;
 }

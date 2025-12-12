@@ -65,8 +65,31 @@ export interface ToolMessageData {
   response_metadata?: Record<string, unknown>;
 }
 
-export interface MessageResponse {
-  type: "human" | "ai" | "tool" | "error";
+// Interrupt 相关类型
+export type InterruptType = "choice" | "input" | "confirm";
 
-  data: BasicMessageData | AIMessageData | ToolMessageData;
+export interface InterruptOption {
+  id: string;
+  label: string;
+  description?: string;
 }
+
+export interface InterruptData {
+  id: string;
+  type: InterruptType;
+  question: string;
+  options?: InterruptOption[];
+  currentValue?: string;
+  context?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export type MessageResponse =
+  | {
+      type: "human" | "ai" | "tool" | "error";
+      data: BasicMessageData | AIMessageData | ToolMessageData;
+    }
+  | {
+      type: "interrupt";
+      data: InterruptData;
+    };

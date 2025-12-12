@@ -4,12 +4,14 @@ import {
   AIMessageData,
   MessageResponse,
   ToolMessageData,
+  InterruptData,
 } from "@/types/message";
 import { Bot, User, Wrench, Square } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { ScrollArea } from "./ui/scroll-area";
 import { MessageContent } from "./MessageContent";
 import { ToolCallDisplay, ToolResultDisplay } from "./ToolDisplay";
+import { InterruptDisplay } from "./InterruptDisplay";
 
 // 判断消息是否有实际内容需要展示
 function hasDisplayableContent(
@@ -29,19 +31,26 @@ function hasDisplayableContent(
   const hasPendingToolCalls =
     hasToolCalls && data.tool_calls!.some((tc) => !toolResultIds.has(tc.id));
 
-  return hasContent || hasPendingToolCalls || message.type === "tool";
+  return (
+    hasContent ||
+    hasPendingToolCalls ||
+    message.type === "tool" ||
+    message.type === "interrupt"
+  );
 }
 
 interface MessageListProps {
   messages: MessageResponse[];
   isThinking?: boolean;
   onCancelThinking?: () => void;
+  onInterruptRespond?: (interruptId: string, response: string) => void;
 }
 
 export const MessageList = ({
   messages,
   isThinking,
   onCancelThinking,
+  onInterruptRespond,
 }: MessageListProps) => {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -125,12 +134,18 @@ export const MessageList = ({
                         : message.type === "error"
                         ? "stardew-box rounded-lg px-4 py-3 border-2 border-red-600 dark:border-red-500"
                         : message.type === "tool" ||
+                          message.type === "interrupt" ||
                           (hasPendingToolCalls && !hasContent)
-                        ? "" // 工具卡片自带样式，不需要额外背景
+                        ? "" // 工具卡片和中断卡片自带样式，不需要额外背景
                         : "stardew-box rounded-2xl px-4 py-3"
                     }`}
                   >
-                    {message.type === "tool" ? (
+                    {message.type === "interrupt" ? (
+                      <InterruptDisplay
+                        data={message.data as InterruptData}
+                        onRespond={onInterruptRespond}
+                      />
+                    ) : message.type === "tool" ? (
                       <ToolResultDisplay
                         data={message.data as ToolMessageData}
                       />

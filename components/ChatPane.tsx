@@ -41,8 +41,27 @@ export default function ChatPane({
   const { data: messages, isLoading: isLoadingHistory } =
     useHistoryMessages(threadId);
 
-  const { isSending, isReceiving, sendMessage, cancel } =
+  const { isSending, isReceiving, sendMessage, cancel, resumeExecution } =
     useStreamedMessages(threadId);
+
+  // 处理 interrupt 响应
+  const handleInterruptRespond = async (
+    interruptId: string,
+    response: string
+  ) => {
+    console.log("🔔 Handling interrupt response:", { interruptId, response });
+
+    // 将响应映射为 allowTool 参数
+    const allowTool = response === "approve" ? "allow" : "deny";
+
+    try {
+      // 调用 resumeExecution 继续执行
+      await resumeExecution(allowTool as "allow" | "deny");
+      console.log("✅ Interrupt response sent successfully");
+    } catch (error) {
+      console.error("❌ Failed to respond to interrupt:", error);
+    }
+  };
 
   // 更新当前线程信息到 context
   useEffect(() => {
@@ -173,6 +192,7 @@ export default function ChatPane({
             messages={messages || []}
             isThinking={isThinking}
             onCancelThinking={handlePauseThinking}
+            onInterruptRespond={handleInterruptRespond}
           />
         )}
       </div>

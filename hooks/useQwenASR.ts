@@ -42,15 +42,6 @@ export function useQwenASR(options: UseQwenASROptions = {}) {
     onStatusChange,
   } = options;
 
-  // 调试：打印环境变量状态
-  console.log("[ASR Init] Environment check:");
-  console.log(
-    "  - API Key from env:",
-    process.env.NEXT_PUBLIC_DASHSCOPE_API_KEY ? "存在" : "不存在"
-  );
-  console.log("  - API Key final:", apiKey ? "已配置" : "未配置");
-  console.log("  - API Key length:", apiKey?.length || 0);
-
   const [status, setStatus] = useState<ASRStatus>({
     isRecording: false,
     isProcessing: false,
@@ -104,7 +95,6 @@ export function useQwenASR(options: UseQwenASROptions = {}) {
       };
 
       ws.send(JSON.stringify(event));
-      console.log("[ASR] Session update sent");
     },
     [enableServerVad]
   );
@@ -130,7 +120,6 @@ export function useQwenASR(options: UseQwenASROptions = {}) {
       };
 
       ws.send(JSON.stringify(appendEvent));
-      console.log(`[ASR] Sent audio chunk: ${pcmData.length} samples`);
     },
     []
   );
@@ -144,7 +133,6 @@ export function useQwenASR(options: UseQwenASROptions = {}) {
           type: "input_audio_buffer.commit",
         };
         ws.send(JSON.stringify(commitEvent));
-        console.log("[ASR] Audio committed");
       }
     },
     [enableServerVad]
@@ -209,7 +197,6 @@ export function useQwenASR(options: UseQwenASROptions = {}) {
     (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
-        console.log("[ASR] Received:", data);
 
         // 实时转写中间结果（text 类型）
         if (data.type === "conversation.item.input_audio_transcription.text") {
@@ -218,14 +205,10 @@ export function useQwenASR(options: UseQwenASROptions = {}) {
           const confirmedText = data.text || "";
           const pendingText = data.stash || "";
 
-          console.log("[ASR] Text (confirmed):", confirmedText);
-          console.log("[ASR] Stash (pending):", pendingText);
-
           // 清除静音定时器（用户继续说话）
           if (silenceTimerRef.current) {
             clearTimeout(silenceTimerRef.current);
             silenceTimerRef.current = null;
-            console.log("[ASR] User continued speaking, cancelled auto-stop");
           }
 
           // 立即调用实时回调，分别传递已确认和待确认文本
@@ -244,7 +227,6 @@ export function useQwenASR(options: UseQwenASROptions = {}) {
           data.type === "conversation.item.input_audio_transcription.delta"
         ) {
           const deltaText = data.delta || "";
-          console.log("[ASR] Delta text:", deltaText);
 
           if (silenceTimerRef.current) {
             clearTimeout(silenceTimerRef.current);
@@ -264,7 +246,6 @@ export function useQwenASR(options: UseQwenASROptions = {}) {
           data.type === "conversation.item.input_audio_transcription.completed"
         ) {
           const transcript = data.transcript || "";
-          console.log("[ASR] Final transcript:", transcript);
 
           updateStatus({
             transcript,
@@ -280,8 +261,6 @@ export function useQwenASR(options: UseQwenASROptions = {}) {
           // VAD 模式下，检测到静音后延迟 5 秒再自动停止
           // 这样用户如果继续说话，可以取消自动停止
           if (enableServerVad) {
-            console.log("[ASR] Silence detected, will auto-stop in 5s...");
-
             // 清除之前的定时器
             if (silenceTimerRef.current) {
               clearTimeout(silenceTimerRef.current);
@@ -289,7 +268,6 @@ export function useQwenASR(options: UseQwenASROptions = {}) {
 
             // 设置延迟停止
             silenceTimerRef.current = setTimeout(() => {
-              console.log("[ASR] Auto-stopping after silence timeout");
               stopRecordingInternal();
             }, 5000);
           }
@@ -329,15 +307,12 @@ export function useQwenASR(options: UseQwenASROptions = {}) {
       // 创建 WebSocket 连接，在 URL 中传递 API Key
       // 阿里云 DashScope 使用 X-DashScope-Api-Key 参数认证
       const url = `${baseUrl}?model=${model}&api_key=${apiKey}`;
-      console.log("[ASR] Connecting to:", baseUrl);
 
       const ws = new WebSocket(url);
       wsRef.current = ws;
       isRunningRef.current = true;
 
       ws.onopen = () => {
-        console.log("[ASR] WebSocket connected");
-        console.log("[ASR] API Key configured:", apiKey ? "Yes" : "No");
         sendSessionUpdate(ws);
         updateStatus({
           isRecording: true,
@@ -348,18 +323,12 @@ export function useQwenASR(options: UseQwenASROptions = {}) {
       ws.onmessage = handleMessage;
 
       ws.onerror = (error) => {
-        console.error("[ASR] WebSocket error:", error);
-        console.error("[ASR] Connection URL:", baseUrl);
-        console.error("[ASR] Model:", model);
-        console.error("[ASR] API Key exists:", !!apiKey);
-        console.error("[ASR] API Key length:", apiKey?.length || 0);
         const err = new Error("WebSocket connection error");
         onError?.(err);
         stopRecordingInternal();
       };
 
       ws.onclose = (event) => {
-        console.log("[ASR] WebSocket closed:", event.code, event.reason);
         isRunningRef.current = false;
       };
 
@@ -395,10 +364,7 @@ export function useQwenASR(options: UseQwenASROptions = {}) {
 
       source.connect(processor);
       processor.connect(audioContext.destination);
-
-      console.log("[ASR] Audio processing started with Web Audio API");
     } catch (err) {
-      console.error("[ASR] Failed to start recording:", err);
       const error =
         err instanceof Error ? err : new Error("Failed to start recording");
       onError?.(error);

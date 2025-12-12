@@ -89,6 +89,10 @@ export async function createMessageStream(
   if (opts?.model) {
     queryParams.append("model", opts.model);
   }
+  // 添加 allowTool 参数用于恢复 interrupt 执行
+  if (opts?.allowTool) {
+    queryParams.append("allowTool", opts.allowTool);
+  }
 
   return new EventSource(`${API_BASE_URL}/stream?${queryParams.toString()}`);
 }

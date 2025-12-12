@@ -11,12 +11,14 @@ export async function GET(request: NextRequest) {
   const userContent = searchParams.get("content");
   const provider = searchParams.get("provider");
   const model = searchParams.get("model");
+  const allowTool = searchParams.get("allowTool") as "allow" | "deny" | null;
 
   console.log("Stream GET request received:", {
     threadId,
     userContent,
     provider,
     model,
+    allowTool,
   });
 
   if (!threadId || typeof userContent !== "string") {
@@ -62,6 +64,7 @@ export async function GET(request: NextRequest) {
             opts: {
               provider: provider || undefined,
               model: model || undefined,
+              allowTool: allowTool || undefined,
             },
           });
 
@@ -70,9 +73,17 @@ export async function GET(request: NextRequest) {
             if (isAborted || abortController.signal.aborted) {
               break;
             }
-            // 仅发送类型为 "ai" 或 "tool" 的消息块
-            if (chunk.type === "ai" || chunk.type === "tool") {
+            // 发送 ai、tool 或 interrupt 类型的消息
+            if (
+              chunk.type === "ai" ||
+              chunk.type === "tool" ||
+              chunk.type === "interrupt"
+            ) {
               send(chunk);
+              // 如果是 interrupt，暂停流，等待恢复命令
+              if (chunk.type === "interrupt") {
+                break;
+              }
             }
           }
 
@@ -122,30 +133,24 @@ export async function GET(request: NextRequest) {
   });
 }
 
+// POST 接口 - 用于恢复被 interrupt 暂停的执行
 export async function POST(request: NextRequest) {
   const body = await request.json();
+  const { threadId, value } = body;
 
-  const { threadId, content: userContent, provider, model } = body || {};
-
-  if (!threadId || typeof userContent !== "string") {
+  if (!threadId) {
     return NextResponse.json(
-      { message: "Invalid request body." },
+      { message: "threadId is required" },
       { status: 400 }
     );
   }
 
-  // 1. 定义编码器，用于将字符串转换为 Uint8Array
   const encoder = new TextEncoder();
-
-  // 用于中断流的控制器
   const abortController = new AbortController();
   let isAborted = false;
 
-  // 2. 创建一个可读流
   const stream = new ReadableStream<Uint8Array>({
-    // 当流开始时调用
-    start(controller) {
-      // 定义发送数据的辅助函数
+    async start(controller) {
       const send = (data: MessageResponse) => {
         if (isAborted) return;
         try {
@@ -153,66 +158,100 @@ export async function POST(request: NextRequest) {
             encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
           );
         } catch {
-          // 流已关闭，忽略
+          // 流已关闭
         }
       };
 
-      // Initial comment to establish stream
-      // 初始化连接时发送一个注释，防止某些浏览器超时
       controller.enqueue(encoder.encode(`: connected\n\n`));
 
-      // 3. 调用 agentService 的流式接口
-      (async () => {
-        try {
-          const iterable = await streamResponse({
-            threadId,
-            userText: userContent,
-            opts: {
-              provider: provider || undefined,
-              model: model || undefined,
-            },
-          });
+      try {
+        // 导入 Command 用于恢复执行
+        const { Command } = await import("@langchain/langgraph");
+        const { ensureAgent } = await import("@/lib/agent");
 
-          for await (const chunk of iterable) {
-            // 检查是否已中断
-            if (isAborted || abortController.signal.aborted) {
-              break;
-            }
-            // 仅发送类型为 "ai" 或 "tool" 的消息块
-            if (chunk.type === "ai" || chunk.type === "tool") {
-              send(chunk);
-            }
+        const agent = await ensureAgent({});
+
+        // 使用 Command 恢复执行
+        const iterable = await agent.stream(new Command({ resume: value }), {
+          streamMode: "messages",
+          configurable: { thread_id: threadId },
+        });
+
+        for await (const chunk of iterable) {
+          if (isAborted || abortController.signal.aborted) {
+            break;
           }
 
-          if (!isAborted) {
-            // 流结束时发送一个特殊的结束信号
-            controller.enqueue(encoder.encode("event: done\n"));
-            controller.enqueue(encoder.encode("data: {}\n\n"));
+          if (!chunk || !Array.isArray(chunk) || chunk.length < 1) continue;
+
+          const [message] = chunk;
+
+          // 处理 ToolMessage
+          if (
+            message?.constructor?.name === "ToolMessage" ||
+            message?.constructor?.name === "ToolMessageChunk"
+          ) {
+            send({
+              type: "tool",
+              data: {
+                id: message.id || Date.now().toString(),
+                content:
+                  typeof message.content === "string"
+                    ? message.content
+                    : JSON.stringify(message.content),
+                status: "success",
+                tool_call_id: (message as any).tool_call_id || "",
+                name: (message as any).name || "",
+              },
+            });
+            continue;
           }
-        } catch (error) {
-          if (!isAborted) {
-            controller.enqueue(encoder.encode("event: error\n"));
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({
-                  message:
-                    error instanceof Error ? error.message : "Unknown error",
-                  threadId,
-                })}\n\n`
-              )
-            );
-          }
-        } finally {
-          try {
-            controller.close();
-          } catch {
-            // 流已关闭，忽略
+
+          // 处理 AI 消息
+          const isAIMessage =
+            message?.constructor?.name === "AIMessageChunk" ||
+            message?.constructor?.name === "AIMessage";
+
+          if (isAIMessage) {
+            const content =
+              typeof message.content === "string" ? message.content : "";
+            if (content) {
+              send({
+                type: "ai",
+                data: {
+                  id: message.id || Date.now().toString(),
+                  content: content,
+                },
+              });
+            }
           }
         }
-      })();
+
+        if (!isAborted) {
+          controller.enqueue(encoder.encode("event: done\n"));
+          controller.enqueue(encoder.encode("data: {}\n\n"));
+        }
+      } catch (error) {
+        if (!isAborted) {
+          controller.enqueue(encoder.encode("event: error\n"));
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                message:
+                  error instanceof Error ? error.message : "Unknown error",
+              })}\n\n`
+            )
+          );
+        }
+      } finally {
+        try {
+          controller.close();
+        } catch {
+          // 流已关闭
+        }
+      }
     },
 
-    // 当客户端断开连接时调用
     cancel() {
       isAborted = true;
       abortController.abort();
@@ -222,10 +261,10 @@ export async function POST(request: NextRequest) {
   return new NextResponse(stream, {
     status: 200,
     headers: {
-      "Content-Type": "text/event-stream; charset=utf-8", // 设置内容类型为事件流
-      "Cache-Control": "no-cache, no-transform", // 禁用缓存和转换
-      Connection: "keep-alive", // 保持连接活跃
-      "X-Accel-Buffering": "no", // 关闭 Nginx 的响应缓冲
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
     },
   });
 }

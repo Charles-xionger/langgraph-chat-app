@@ -56,10 +56,25 @@ export function useStreamedMessages(threadId?: string) {
         stream.onmessage = (event: MessageEvent) => {
           try {
             const messageResponse = JSON.parse(event.data) as MessageResponse;
+            console.log(
+              "📨 Received message:",
+              messageResponse.type,
+              messageResponse
+            );
+
             const data: any = messageResponse.data;
 
             // 一旦收到第一个消息，标记为正在接收
             setIsReceiving(true);
+
+            // 中断消息 (type: "interrupt") 直接追加，用于显示审批 UI
+            if (messageResponse.type === "interrupt") {
+              queryClient.setQueryData(
+                ["messages", tid],
+                (old: MessageResponse[] = []) => [...old, messageResponse]
+              );
+              return;
+            }
 
             // 工具执行结果消息 (type: "tool") 直接追加，不累积
             if (messageResponse.type === "tool") {
@@ -232,10 +247,40 @@ export function useStreamedMessages(threadId?: string) {
     cleanupStream();
   }, [cleanupStream]);
 
+  // 恢复 interrupt 执行的函数
+  const resumeExecution = useCallback(
+    async (allowTool: "allow" | "deny") => {
+      if (!threadId) return;
+
+      console.log("🔄 Resuming execution with:", { threadId, allowTool });
+
+      // 先移除 interrupt 消息，避免重复显示
+      queryClient.setQueryData(
+        ["messages", threadId],
+        (old: MessageResponse[] = []) =>
+          old.filter((msg) => msg.type !== "interrupt")
+      );
+
+      // 重置 currentMessageRef，确保新的 AI 响应能正确处理
+      currentMessageRef.current = null;
+
+      // 使用 GET 接口并传递 allowTool 参数来恢复执行
+      await handleStreamResponse({
+        threadId,
+        text: "", // 空字符串，因为这是恢复操作，不是新消息
+        opts: {
+          allowTool,
+        },
+      });
+    },
+    [threadId, handleStreamResponse, queryClient]
+  );
+
   return {
     sendMessage,
     handleStreamResponse,
     cancel,
+    resumeExecution,
     isSending,
     isReceiving,
     sendError,

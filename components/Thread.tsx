@@ -3,7 +3,8 @@ import {
   useHistoryMessages,
 } from "@/app/api/agent/server-store";
 import { useStreamedMessages } from "@/hooks/useStreamedMessages";
-import { MessageOptions } from "@/types/message";
+import { MessageOptions, MessageResponse } from "@/types/message";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { MessageList } from "./MessageList";
 import { MessageInput } from "./MessageInput";
@@ -16,6 +17,7 @@ interface IThreadProps {
 }
 
 export const Thread = ({ threadId, onFirstMessageSent }: IThreadProps) => {
+  const queryClient = useQueryClient();
   const { setCurrentThread } = useThreadContext();
   const firstMessageInitiatedRef = useRef(false);
   const [awaitingFirstResponse, setAwaitingFirstResponse] = useState(false);
@@ -23,7 +25,7 @@ export const Thread = ({ threadId, onFirstMessageSent }: IThreadProps) => {
   const { data: messages, isLoading: isLoadingHistory } =
     useHistoryMessages(threadId);
 
-  const { isSending, isReceiving, sendMessage, cancel } =
+  const { isSending, isReceiving, sendMessage, cancel, resumeExecution } =
     useStreamedMessages(threadId);
 
   // 更新当前线程信息到 context
@@ -85,11 +87,35 @@ export const Thread = ({ threadId, onFirstMessageSent }: IThreadProps) => {
     );
   }
 
+  // 处理 interrupt 响应
+  const handleInterruptRespond = async (
+    interruptId: string,
+    response: string
+  ) => {
+    console.log("🔔 Handling interrupt response:", { interruptId, response });
+
+    // 将响应映射为 allowTool 参数
+    const allowTool = response === "approve" ? "allow" : "deny";
+
+    try {
+      // 调用 resumeExecution 继续执行（resumeExecution 内部会处理消息移除）
+      await resumeExecution(allowTool as "allow" | "deny");
+      console.log("✅ Interrupt response sent successfully");
+    } catch (error) {
+      console.error("❌ Failed to respond to interrupt:", error);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col">
       {/* 展示消息列表 */}
       <div className="flex-1 overflow-hidden">
-        <MessageList messages={messages || []} />
+        <MessageList
+          messages={messages || []}
+          isThinking={isSending || isReceiving}
+          onCancelThinking={cancel}
+          onInterruptRespond={handleInterruptRespond}
+        />
       </div>
 
       {/* message input */}
