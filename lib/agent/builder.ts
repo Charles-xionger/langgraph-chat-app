@@ -31,9 +31,8 @@ export class AgentBuilder {
   private readonly model: BaseChatModel;
   private checkpointer?: BaseCheckpointSaver;
   private systemPrompt: string = "";
-  private toolNode: ToolNode; // 工具节点, 用于执行外部操作
-  private tools: DynamicTool[]; // 工具列表, 用于执行外部操作 TODO
-  // private approveAllTools: boolean = false; // 如果为 true，工具调用将被自动批准，跳过人工批准环节
+  private toolNode: ToolNode;
+  private tools: DynamicTool[];
 
   constructor({
     tools,
@@ -74,118 +73,6 @@ export class AgentBuilder {
     return {
       messages: response,
     };
-  }
-
-  // 等待验证 目前执行错误
-  // async toolNode(state: typeof MessagesAnnotation.State) {
-  //   const toolsByName: Record<string, DynamicTool> = {};
-  //   for (const tool of this.tools) {
-  //     toolsByName[tool.name] = tool;
-  //   }
-
-  //   const messages = Array.isArray(state.messages) ? state.messages : [];
-  //   console.log("🚀 ~ toolNode ~ messages:", messages);
-  //   const lastMessage = messages.at
-  //     ? messages.at(-1)
-  //     : messages[messages.length - 1];
-
-  //   // lastMessage 必须是 AIMessage，且包含 tool_calls
-
-  //   if (
-  //     lastMessage == null ||
-  //     !this.isAIMessage(lastMessage) ||
-  //     !lastMessage.tool_calls
-  //   ) {
-  //     return { messages: [] };
-  //   }
-
-  //   const result: ToolMessage[] = [];
-  //   for (const toolCall of lastMessage.tool_calls ?? []) {
-  //     const tool = toolsByName[toolCall.name];
-  //     // 调用对应的工具
-  //     const observation = await tool.invoke(toolCall);
-  //     // 将 observation 添加到结果中
-  //     result.push(observation);
-  //   }
-
-  //   return { messages: result };
-  // }
-
-  // 智能路由器 - 分析用户输入并决定是否需要工具
-  private async routeQuery(state: typeof MessagesAnnotation.State) {
-    const messages = state.messages;
-    const lastUserMessage = messages
-      .slice()
-      .reverse()
-      .find((msg) => msg.constructor.name === "HumanMessage");
-
-    if (!lastUserMessage) return "chatbot";
-
-    const userInput = lastUserMessage.content.toString().toLowerCase();
-
-    // 检查是否包含需要搜索的关键词
-    const searchTriggers = [
-      "http",
-      "https",
-      "www.",
-      ".com",
-      ".org",
-      ".net", // URLs
-      "latest",
-      "current",
-      "today",
-      "recent",
-      "new", // 时效性
-      "what is",
-      "how to",
-      "explain",
-      "documentation", // 查询性
-      "langgraph",
-      "langchain",
-      "javascript",
-      "python", // 技术术语
-      "tutorial",
-      "guide",
-      "example",
-      "API", // 学习资源
-    ];
-
-    const needsSearch = searchTriggers.some((trigger) =>
-      userInput.includes(trigger)
-    );
-
-    if (needsSearch) {
-      return "search_first";
-    }
-
-    return "chatbot";
-  }
-
-  // 增强的条件判断 - 决定下一步行动
-  shouldContinue(state: typeof MessagesAnnotation.State) {
-    console.log("Evaluating shouldContinue with state:", state);
-    const lastMessage = state.messages.at(-1);
-    if (lastMessage == null || !this.isAIMessage(lastMessage)) return END;
-
-    // 如果 lastMessage 包含 tool_calls，则继续到工具节点
-    if (lastMessage.tool_calls?.length) {
-      return "tools";
-    }
-
-    // 检查是否需要补充信息
-    const content = lastMessage.content.toString().toLowerCase();
-    const needsMoreInfo = [
-      "i need more information",
-      "let me search for",
-      "i should check",
-      "requires verification",
-    ].some((phrase) => content.includes(phrase));
-
-    if (needsMoreInfo) {
-      return "tools";
-    }
-
-    return END;
   }
 
   isAIMessage(msg: BaseMessage | undefined): msg is AIMessage {
@@ -291,26 +178,27 @@ export class AgentBuilder {
 
   build() {
     const stateGraph = new StateGraph(MessagesAnnotation)
-      // 核心节点
       .addNode("chatbot", this.callModel.bind(this))
       .addNode("tools", this.toolNode)
-
-      // 起始 → chatbot
       .addEdge(START, "chatbot")
-
-      // chatbot 的条件路由
-      .addConditionalEdges("chatbot", this.shouldContinue.bind(this), {
-        tools: "tools",
-        [END]: END,
-      })
-
-      // 工具执行后返回 chatbot
+      .addConditionalEdges(
+        "chatbot",
+        (state) => {
+          const lastMessage = state.messages.at(-1);
+          if (this.isAIMessage(lastMessage) && lastMessage.tool_calls?.length) {
+            return "tools";
+          }
+          return END;
+        },
+        {
+          tools: "tools",
+          [END]: END,
+        }
+      )
       .addEdge("tools", "chatbot");
 
-    const compiledGraph = stateGraph.compile({
+    return stateGraph.compile({
       checkpointer: this.checkpointer,
     });
-
-    return compiledGraph;
   }
 }
