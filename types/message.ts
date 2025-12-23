@@ -5,17 +5,37 @@ export interface Thread {
   updatedAt: string;
 }
 
+export interface AttachmentFile {
+  text?: string;
+  url?: string;
+  data?: string; // base64 数据
+  type: "image" | "pdf" | "audio" | "video";
+  source_type: "url" | "base64";
+  name: string;
+  size: number;
+}
+
 export interface MessageOptions {
   provider?: string;
   model?: string;
   tools?: string[];
   allowTool?: "allow" | "deny";
   approveAllTools?: boolean; // if true, skip tool approval prompts
+  files?: AttachmentFile[]; // 多模态文件支持
 }
 
 export interface BasicMessageData {
   id: string;
-  content: string;
+  content: string | MultiModalContent[];
+}
+
+// 多模态内容类型
+export interface MultiModalContent {
+  type: "text" | "image_url";
+  text?: string;
+  image_url?: {
+    url: string;
+  };
 }
 
 export interface ToolCall {

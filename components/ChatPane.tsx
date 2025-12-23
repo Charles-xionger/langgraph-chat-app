@@ -8,7 +8,7 @@ import {
 } from "@/app/api/agent/server-store";
 import { useStreamedMessages } from "@/hooks/useStreamedMessages";
 import { useThreadContext } from "@/contexts/ThreadContext";
-import { MessageOptions } from "@/types/message";
+import { MessageOptions, AttachmentFile } from "@/types/message";
 import { MessageList } from "./MessageList";
 import Composer from "./Composer";
 import Junimo from "./Junimo";
@@ -77,8 +77,11 @@ export default function ChatPane({
   }, [threadId, threads, messages, setCurrentThread]);
 
   // 处理发送消息的逻辑
-  const handleSendMessage = async (message: string, opts?: MessageOptions) => {
-    const isNotEmpty = message.trim().length > 0;
+  const handleSendMessage = async (
+    message: string,
+    files?: AttachmentFile[]
+  ) => {
+    const isNotEmpty = message.trim().length > 0 || (files && files.length > 0);
 
     if (isNotEmpty) {
       setIsThinking(true);
@@ -86,12 +89,12 @@ export default function ChatPane({
 
     // 合并模型配置
     const finalOpts: MessageOptions = {
-      ...opts,
-      provider: selectedProvider || opts?.provider,
-      model: selectedModelId || opts?.model,
+      provider: selectedProvider || undefined,
+      model: selectedModelId || undefined,
+      ...(files && files.length > 0 && { files }),
     };
 
-    await sendMessage(message, finalOpts);
+    await sendMessage(message, files, finalOpts);
 
     if (isNotEmpty) {
       firstMessageInitiatedRef.current = true;

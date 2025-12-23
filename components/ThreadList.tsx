@@ -7,7 +7,6 @@ import {
   useUpdateThreadTitle,
   useDeleteThread,
 } from "@/app/api/agent/server-store";
-import { Thread } from "@/types/message";
 import ConversationRow from "./ConversationRow";
 
 interface ThreadListProps {

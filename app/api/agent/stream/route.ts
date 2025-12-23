@@ -133,10 +133,10 @@ export async function GET(request: NextRequest) {
   });
 }
 
-// POST 接口 - 用于恢复被 interrupt 暂停的执行
+// POST 接口 - 支持文件上传的消息请求和恢复被 interrupt 暂停的执行
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { threadId, value } = body;
+  const { threadId, content, provider, model, allowTool, files, value } = body;
 
   if (!threadId) {
     return NextResponse.json(
@@ -145,6 +145,118 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // 如果是恢复请求（有 value 参数），使用原有逻辑
+  if (value !== undefined) {
+    return handleInterruptResume(threadId, value);
+  }
+
+  // 新消息请求处理逻辑
+  if (typeof content !== "string") {
+    return NextResponse.json(
+      { message: "Invalid request body." },
+      { status: 400 }
+    );
+  }
+
+  console.log("Stream POST request received:", {
+    threadId,
+    content,
+    provider,
+    model,
+    allowTool,
+    files: files?.length || 0,
+  });
+
+  const encoder = new TextEncoder();
+  const abortController = new AbortController();
+  let isAborted = false;
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (data: MessageResponse) => {
+        if (isAborted) return;
+        try {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
+          );
+        } catch {
+          // 流已关闭，忽略
+        }
+      };
+
+      controller.enqueue(encoder.encode(`: connected\n\n`));
+
+      try {
+        const iterable = await streamResponse({
+          threadId,
+          userText: content,
+          opts: { provider, model, allowTool, files },
+        });
+
+        for await (const chunk of iterable) {
+          // 检查是否已中断
+          if (isAborted || abortController.signal.aborted) {
+            break;
+          }
+          // 发送 ai、tool 或 interrupt 类型的消息
+          if (
+            chunk.type === "ai" ||
+            chunk.type === "tool" ||
+            chunk.type === "interrupt"
+          ) {
+            send(chunk);
+            // 如果是 interrupt，暂停流，等待恢复命令
+            if (chunk.type === "interrupt") {
+              break;
+            }
+          }
+        }
+
+        if (!isAborted) {
+          controller.enqueue(encoder.encode("event: done\n"));
+          controller.enqueue(encoder.encode("data: {}\n\n"));
+        }
+      } catch (error) {
+        console.error("Stream error:", error);
+        if (!isAborted) {
+          controller.enqueue(encoder.encode("event: error\n"));
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                message:
+                  error instanceof Error ? error.message : "Unknown error",
+              })}\n\n`
+            )
+          );
+        }
+      } finally {
+        try {
+          controller.close();
+        } catch {
+          // 流已关闭
+        }
+      }
+    },
+
+    cancel() {
+      isAborted = true;
+      abortController.abort();
+    },
+  });
+
+  return new NextResponse(stream, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
+// 处理 interrupt 恢复的辅助函数
+async function handleInterruptResume(threadId: string, value: any) {
   const encoder = new TextEncoder();
   const abortController = new AbortController();
   let isAborted = false;

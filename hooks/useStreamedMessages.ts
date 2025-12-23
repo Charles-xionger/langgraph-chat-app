@@ -1,5 +1,10 @@
 import { createMessageStream } from "@/services/chatService";
-import { MessageOptions, MessageResponse } from "@/types/message";
+import {
+  MessageOptions,
+  MessageResponse,
+  AttachmentFile,
+  MultiModalContent,
+} from "@/types/message";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -219,20 +224,56 @@ export function useStreamedMessages(threadId?: string) {
   );
 
   const sendMessage = useCallback(
-    async (text: string, opts?: MessageOptions) => {
+    async (text: string, files?: AttachmentFile[], opts?: MessageOptions) => {
       if (!threadId) return;
 
       const tempId = `temp-${Date.now()}`;
+
+      // 构建多模态内容
+      let content: string | MultiModalContent[] = text;
+      if (files && files.length > 0) {
+        const multiModalContent: MultiModalContent[] = [
+          {
+            type: "text",
+            text: text,
+          },
+        ];
+
+        // 添加图片内容
+        files.forEach((file) => {
+          if (file.type === "image") {
+            multiModalContent.push({
+              type: "image_url",
+              image_url: {
+                url: file.url || `data:image/png;base64,${file.data}`,
+              },
+            });
+          }
+        });
+
+        content = multiModalContent;
+      }
+
       const userMessage: MessageResponse = {
         type: "human",
-        data: { id: tempId, content: text },
+        data: { id: tempId, content },
       };
       queryClient.setQueryData(
         ["messages", threadId],
         (old: MessageResponse[] = []) => [...old, userMessage]
       );
 
-      await handleStreamResponse({ threadId, text, opts });
+      // 合并文件选项
+      const messageOptions: MessageOptions = {
+        ...opts,
+        ...(files && files.length > 0 && { files }),
+      };
+
+      await handleStreamResponse({
+        threadId,
+        text,
+        opts: messageOptions,
+      });
     },
     [threadId, queryClient, handleStreamResponse]
   );

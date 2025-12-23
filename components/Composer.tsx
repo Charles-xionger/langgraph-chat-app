@@ -13,9 +13,11 @@ import ComposerActionsPopover from "./ComposerActionsPopover";
 import { cls } from "@/lib/utils";
 import { CHATBOT_MODELS } from "@/lib/constants";
 import { useQwenASR } from "@/hooks/useQwenASR";
+import { useFileUpload } from "@/hooks/useFileUpload";
+import { AttachmentFile } from "@/types/message";
 
 interface ComposerProps {
-  onSend?: (message: string) => void | Promise<void>;
+  onSend?: (message: string, files?: AttachmentFile[]) => void | Promise<void>;
   busy?: boolean;
   selectedModel?: string;
   onModelChange?: (
@@ -39,9 +41,13 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
   const [isFocused, setIsFocused] = useState(false);
   const [lineCount, setLineCount] = useState(1);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState<AttachmentFile[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const initialTextRef = useRef<string>(""); // 保存录音前的初始文本
+
+  const { uploadFile, uploading, progress } = useFileUpload();
 
   const currentModel =
     CHATBOT_MODELS.find((bot) => bot.name === selectedModel) ||
@@ -92,6 +98,50 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
       alert(`语音识别错误: ${error.message}`);
     },
   });
+
+  // 处理文件上传
+  const handleFileUpload = async (files: FileList | null) => {
+    console.log("handleFileUpload called with:", files);
+    if (!files || files.length === 0) return;
+
+    const newFiles: AttachmentFile[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        console.log("Uploading file:", file.name);
+        const url = await uploadFile(file);
+        console.log("🚀 ~ handleFileUpload ~ url:", url);
+        const fileType = file.type.startsWith("image/")
+          ? "image"
+          : file.type.startsWith("audio/")
+          ? "audio"
+          : file.type.startsWith("video/")
+          ? "video"
+          : "pdf";
+
+        newFiles.push({
+          url,
+          type: fileType,
+          source_type: "url",
+          name: file.name,
+          size: file.size,
+        });
+      } catch (error) {
+        console.error(`Failed to upload ${file.name}:`, error);
+        alert(`Failed to upload ${file.name}`);
+      }
+    }
+
+    if (newFiles.length > 0) {
+      setAttachedFiles((prev) => [...prev, ...newFiles]);
+    }
+  };
+
+  // 移除附件
+  const removeAttachment = (index: number) => {
+    setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
 
   // 处理语音按钮点击
   const handleVoiceClick = () => {
@@ -168,7 +218,8 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
   );
 
   async function handleSend() {
-    if (!value.trim() || sending) return;
+    if ((!value.trim() && attachedFiles.length === 0) || sending || uploading)
+      return;
 
     // 如果正在录音，先停止
     if (isRecording) {
@@ -177,8 +228,12 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
 
     setSending(true);
     try {
-      await onSend?.(value);
+      await onSend?.(
+        value,
+        attachedFiles.length > 0 ? attachedFiles : undefined
+      );
       setValue("");
+      setAttachedFiles([]);
       initialTextRef.current = "";
       inputRef.current?.focus();
     } finally {
@@ -189,6 +244,49 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
   return (
     <div className="border-t-4 border-[#552814] dark:border-[#3d2f1f] p-4 bg-[#F2E6C2] dark:bg-[#1a1f2e]">
       <div className="mx-auto flex flex-col inventory-slot rounded-lg p-3 max-w-3xl">
+        {/* File attachments preview */}
+        {attachedFiles.length > 0 && (
+          <div className="mb-3 p-2 border-2 border-dashed border-[#C78F56]/30 rounded-lg">
+            <div className="flex flex-wrap gap-2">
+              {attachedFiles.map((file, index) => (
+                <div
+                  key={index}
+                  className="flex items-center gap-2 bg-[#C78F56]/20 rounded px-2 py-1 text-xs"
+                >
+                  <span className="text-[#451806] dark:text-[#F2E6C2]">
+                    {file.type === "image" && "🖼️"}
+                    {file.type === "pdf" && "📄"}
+                    {file.type === "audio" && "🎵"}
+                    {file.type === "video" && "🎬"}
+                    {file.name}
+                  </span>
+                  <button
+                    onClick={() => removeAttachment(index)}
+                    className="text-red-500 hover:text-red-700 ml-1"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Upload progress */}
+        {uploading && (
+          <div className="mb-3 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+            <div className="text-xs text-blue-600 dark:text-blue-400 mb-1">
+              Uploading... {progress}%
+            </div>
+            <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
+              <div
+                className="bg-blue-600 h-2 rounded-full transition-all"
+                style={{ width: `${progress}%` }}
+              ></div>
+            </div>
+          </div>
+        )}
+
         <div className="flex-1 relative">
           <textarea
             ref={inputRef}
@@ -201,7 +299,7 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
             className={cls(
               "w-full resize-none bg-transparent text-sm outline-none placeholder:text-[#A05030]/60 dark:placeholder:text-[#8B7355]/60 transition-all duration-200 stardew-input",
               "px-0 py-2 min-h-10 text-left text-[#451806] dark:text-[#F2E6C2]",
-              "font-[family-name:var(--font-sans)]"
+              "font-sans"
             )}
             style={{
               height: "auto",
@@ -227,7 +325,7 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
 
         <div className="flex items-center justify-between mt-2">
           <div className="flex items-center gap-1">
-            <ComposerActionsPopover>
+            <ComposerActionsPopover onFileUpload={handleFileUpload}>
               <button
                 className="inline-flex shrink-0 items-center justify-center rounded p-2 text-[#A05030] dark:text-[#C78F56] hover:bg-[#C78F56]/20 hover:text-[#552814] dark:hover:text-[#F2E6C2] transition-colors"
                 title="Add attachment"
@@ -235,6 +333,15 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
                 <Plus className="h-4 w-4" />
               </button>
             </ComposerActionsPopover>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.txt"
+              onChange={(e) => handleFileUpload(e.target.files)}
+              style={{ display: "none" }}
+            />
 
             {/* Model selector */}
             <div className="relative" ref={dropdownRef}>
@@ -305,10 +412,18 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
             </button>
             <button
               onClick={handleSend}
-              disabled={sending || busy || !value.trim()}
+              disabled={
+                sending ||
+                busy ||
+                uploading ||
+                (!value.trim() && attachedFiles.length === 0)
+              }
               className={cls(
                 "inline-flex shrink-0 items-center gap-2 stardew-btn rounded px-4 py-2 text-sm font-bold",
-                (sending || busy || !value.trim()) &&
+                (sending ||
+                  busy ||
+                  uploading ||
+                  (!value.trim() && attachedFiles.length === 0)) &&
                   "opacity-50 cursor-not-allowed"
               )}
             >

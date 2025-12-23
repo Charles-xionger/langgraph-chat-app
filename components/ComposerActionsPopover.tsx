@@ -1,5 +1,5 @@
 "use client";
-import { JSX, useState } from "react";
+import { JSX, useState, useRef } from "react";
 import {
   Paperclip,
   Bot,
@@ -23,20 +23,30 @@ interface ActionItem {
 
 interface ComposerActionsPopoverProps {
   children: React.ReactNode;
+  onFileUpload?: (files: FileList | null) => void;
 }
 
 export default function ComposerActionsPopover({
   children,
+  onFileUpload,
 }: ComposerActionsPopoverProps) {
   const [open, setOpen] = useState(false);
   const [showMore, setShowMore] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const mainActions: ActionItem[] = [
     {
       icon: Paperclip,
       label: "Add photos & files",
       color: "text-[#A05030]",
-      action: () => console.log("Add photos & files"),
+      action: () => {
+        console.log("File upload button clicked");
+        // 延迟触发文件选择器，确保 DOM 元素存在
+        setTimeout(() => {
+          console.log("Triggering file input", fileInputRef.current);
+          fileInputRef.current?.click();
+        }, 0);
+      },
     },
     {
       icon: Bot,
@@ -107,10 +117,12 @@ export default function ComposerActionsPopover({
     },
   ];
 
-  const handleAction = (action: () => void) => {
+  const handleAction = (action: () => void, isFileUpload: boolean = false) => {
     action();
-    setOpen(false);
-    setShowMore(false);
+    if (!isFileUpload) {
+      setOpen(false);
+      setShowMore(false);
+    }
   };
 
   const handleMoreClick = () => {
@@ -132,15 +144,38 @@ export default function ComposerActionsPopover({
         align="start"
         side="top"
       >
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.txt"
+          onChange={(e) => {
+            console.log("File input changed", e.target.files);
+            onFileUpload?.(e.target.files);
+            setOpen(false);
+            setShowMore(false);
+          }}
+          style={{ display: "none" }}
+        />
         {!showMore ? (
           <div className="p-3">
             <div className="space-y-1">
               {mainActions.map((action, index) => {
                 const IconComponent = action.icon;
+                const isFileUpload = action.label === "Add photos & files";
                 return (
                   <button
                     key={index}
-                    onClick={() => handleAction(action.action)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (isFileUpload) {
+                        console.log("Direct file upload click");
+                        fileInputRef.current?.click();
+                      } else {
+                        handleAction(action.action, isFileUpload);
+                      }
+                    }}
                     className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-[#C78F56]/20 dark:hover:bg-[#C78F56]/10 rounded transition-colors"
                   >
                     <IconComponent
@@ -171,10 +206,11 @@ export default function ComposerActionsPopover({
               <div className="space-y-1">
                 {mainActions.map((action, index) => {
                   const IconComponent = action.icon;
+                  const isFileUpload = action.label === "Add photos & files";
                   return (
                     <button
                       key={index}
-                      onClick={() => handleAction(action.action)}
+                      onClick={() => handleAction(action.action, isFileUpload)}
                       className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-[#C78F56]/20 dark:hover:bg-[#C78F56]/10 rounded transition-colors"
                     >
                       <IconComponent
@@ -206,7 +242,7 @@ export default function ComposerActionsPopover({
                   return (
                     <button
                       key={index}
-                      onClick={() => handleAction(action.action)}
+                      onClick={() => handleAction(action.action, false)}
                       className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-[#C78F56]/20 dark:hover:bg-[#C78F56]/10 rounded transition-colors"
                     >
                       {typeof IconComponent === "function" &&

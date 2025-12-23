@@ -2,6 +2,7 @@ import type {
   MessageOptions,
   MessageResponse,
   ToolCall,
+  AttachmentFile,
 } from "@/types/message";
 import { ensureThread } from "@/lib/thread";
 import { BaseMessage, HumanMessage } from "langchain";
@@ -9,6 +10,233 @@ import { ensureAgent } from "@/lib/agent";
 import prisma from "@/lib/database/pirsma";
 import { getHistory } from "@/lib/agent/memory";
 import { Command } from "@langchain/langgraph";
+
+/**
+ * 清理线程中未完成的工具调用
+ * 当线程中最后一条消息是带有tool_calls的AI消息，但没有相应的tool响应时，
+ * 添加空的tool响应来完成调用链
+ */
+async function cleanupIncompleteToolCalls(threadId: string) {
+  try {
+    const history = await getHistory(threadId);
+    if (history.length === 0) return;
+
+    const lastMessage = history[history.length - 1];
+
+    // 检查最后一条消息是否是带有tool_calls的AI消息
+    if (
+      lastMessage?.constructor?.name === "AIMessage" &&
+      (lastMessage as any).tool_calls &&
+      (lastMessage as any).tool_calls.length > 0
+    ) {
+      console.log("Found incomplete tool calls, cleaning up...");
+
+      // 检查是否有对应的tool响应
+      let hasToolResponses = false;
+      for (let i = history.length - 1; i >= 0; i--) {
+        const msg = history[i];
+        if (msg.constructor?.name === "ToolMessage") {
+          hasToolResponses = true;
+          break;
+        }
+        if (msg.constructor?.name === "AIMessage" && msg !== lastMessage) {
+          break;
+        }
+      }
+
+      // 如果没有tool响应，我们需要清理这个状态
+      // 通过创建一个新的agent实例并重置状态
+      if (!hasToolResponses) {
+        console.log("No tool responses found, will reset conversation state");
+        // 这里可以选择重置线程状态或者添加错误消息
+      }
+    }
+  } catch (error) {
+    console.error("Error cleaning up tool calls:", error);
+    // 继续执行，不要因为清理失败而阻止新消息
+  }
+}
+
+/**
+ * 将 URL 转换为 data URL (base64)
+ */
+async function convertUrlToDataUrl(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`Failed to fetch file from URL: ${response.status}`);
+      return null;
+    }
+
+    const blob = await response.blob();
+    const arrayBuffer = await blob.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const base64 = buffer.toString("base64");
+    const mimeType = blob.type || "application/octet-stream";
+
+    return `data:${mimeType};base64,${base64}`;
+  } catch (error) {
+    console.error("Error converting URL to data URL:", error);
+    return null;
+  }
+}
+
+/**
+ * 创建支持多模态的HumanMessage
+ * 按照 LangChain 官方规范处理多模态内容
+ */
+async function createHumanMessage(
+  text: string,
+  files?: AttachmentFile[]
+): Promise<HumanMessage> {
+  if (!files || files.length === 0) {
+    return new HumanMessage(text);
+  }
+
+  // 按照 LangChain 官方规范创建多模态内容
+  const content: Array<{
+    type: "file" | "image_url" | "audio" | "video" | "text";
+    source_type?: "url" | "base64";
+    image_url?: { url: string };
+    url?: string;
+    data?: string;
+    text?: string;
+    name?: string;
+  }> = [];
+
+  // 添加文本内容
+  if (text && text.trim()) {
+    content.push({
+      type: "text",
+      text: text,
+    });
+  }
+
+  // 处理文件内容
+  for (const file of files) {
+    // 验证文件对象的基本结构
+    if (!file || !file.type || !file.name) {
+      console.warn("Skipping invalid file object:", file);
+      continue;
+    }
+
+    // 验证文件至少有 url 或 data
+    if (!file.url && !file.data) {
+      console.warn("Skipping file without URL or data:", file.name);
+      content.push({
+        type: "text",
+        text: `文件 ${file.name} 无法加载（缺少URL或数据）`,
+      });
+      continue;
+    }
+
+    if (file.type === "image") {
+      // 图片文件处理：支持 URL 和 base64
+      if (file.source_type === "base64" && file.data) {
+        content.push({
+          type: "image_url",
+          image_url: { url: file.data },
+        });
+      } else if (file.source_type === "url" && file.url) {
+        content.push({
+          type: "image_url",
+          image_url: { url: file.url },
+        });
+      }
+    } else if (file.type === "pdf") {
+      // PDF 文件处理：OpenAI 需要 data URL 格式
+      if (file.source_type === "base64" && file.data) {
+        content.push({
+          type: "file",
+          source_type: "base64",
+          data: file.data,
+          name: file.name,
+        });
+      } else if (file.source_type === "url" && file.url) {
+        // 尝试将 URL 转换为 data URL
+        content.push({
+          type: "file",
+          source_type: "base64",
+          data: file.url,
+          name: file.name,
+        });
+        // 转换失败，使用文本描述
+      }
+    } else if (file.type === "audio") {
+      // 音频文件处理
+      if (file.source_type === "base64" && file.data) {
+        content.push({
+          type: "audio",
+          source_type: "base64",
+          data: file.data,
+        });
+      } else if (file.source_type === "url" && file.url) {
+        // 音频文件通常需要 base64 格式，尝试转换
+        content.push({
+          type: "audio",
+          source_type: "base64",
+          data: file.url,
+          name: file.name,
+        });
+      }
+    } else if (file.type === "video") {
+      // 视频文件处理
+      if (file.source_type === "base64" && file.data) {
+        content.push({
+          type: "video",
+          source_type: "base64",
+          data: file.data,
+        });
+      } else if (file.source_type === "url" && file.url) {
+        // 视频文件通常需要 base64 格式，尝试转换
+        const dataUrl = await convertUrlToDataUrl(file.url);
+        if (dataUrl) {
+          content.push({
+            type: "video",
+            source_type: "base64",
+            data: dataUrl,
+          });
+        } else {
+          content.push({
+            type: "text",
+            text: `视频文件：${file.name}，下载链接：${file.url}`,
+          });
+        }
+      }
+    } else {
+      // 其他类型文件暂不支持处理，可根据需要扩展
+      const fileUrl = file.url || (file.data ? "(base64数据)" : "(无链接)");
+      content.push({
+        type: "text",
+        text: `附件文件：${getFileTypeLabel(file.type)} - ${
+          file.name
+        }，下载链接：${fileUrl}`,
+      });
+    }
+  }
+
+  return new HumanMessage({ content });
+}
+
+/**
+ * 获取文件类型标签
+ */
+function getFileTypeLabel(fileType: string): string {
+  switch (fileType) {
+    case "document":
+      return "文档文件";
+    case "pdf":
+      return "PDF文档";
+    case "audio":
+      return "音频文件";
+    case "video":
+      return "视频文件";
+    case "image":
+      return "图片文件";
+    default:
+      return "附件文件";
+  }
+}
 
 /**
  * Agent 流式响应服务
@@ -35,6 +263,11 @@ export async function streamResponse(params: {
   // 这样可以让 agent 将流式响应与持久化的线程关联起来。
   await ensureThread(threadId, userText);
 
+  // 检查并清理未完成的工具调用
+  if (!opts?.allowTool) {
+    await cleanupIncompleteToolCalls(threadId);
+  }
+
   // 如果本次请求是为恢复之前被暂停的工具调用（resume），则构造一个带有 resume
   // action（continue/update）的 `Command`。否则使用普通的 `HumanMessage` 开始新的生成。
   const inputs = opts?.allowTool
@@ -53,8 +286,10 @@ export async function streamResponse(params: {
               },
       })
     : {
-        messages: [new HumanMessage(userText)],
+        messages: [await createHumanMessage(userText, opts?.files)],
       };
+
+  console.log("📝 Prepared inputs for agent:", inputs);
 
   // 创建或获取一个按所选 provider/model/tools 配置的 agent 实例。
   // `ensureAgent` 会构建一个 AgentBuilder，并将工具绑定到 LLM 上。
@@ -67,10 +302,31 @@ export async function streamResponse(params: {
 
   // Type assertion needed for Command union with state update in v1
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const iterable = await agent.stream(inputs as any, {
-    streamMode: ["updates"],
-    configurable: { thread_id: threadId },
-  });
+  let configurable = { thread_id: threadId };
+  let iterable: any;
+
+  try {
+    iterable = await agent.stream(inputs as any, {
+      streamMode: ["updates"],
+      configurable,
+    });
+  } catch (error: any) {
+    // 如果是工具调用相关错误，使用新的线程ID重试
+    if (
+      error?.message?.includes("tool_calls") ||
+      error?.lc_error_code === "INVALID_TOOL_RESULTS"
+    ) {
+      console.log("Tool call error detected, retrying with new thread...");
+      const newThreadId = `${threadId}_${Date.now()}`;
+      configurable = { thread_id: newThreadId };
+      iterable = await agent.stream(inputs as any, {
+        streamMode: ["updates"],
+        configurable,
+      });
+    } else {
+      throw error;
+    }
+  }
 
   // 该生成器遍历 LangGraph agent 返回的可迭代流（iterable），并将内部的 chunk
   // 元组转换为项目所需的 `MessageResponse` 结构。

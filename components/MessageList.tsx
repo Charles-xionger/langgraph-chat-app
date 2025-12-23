@@ -6,7 +6,7 @@ import {
   ToolMessageData,
   InterruptData,
 } from "@/types/message";
-import { Bot, User, Wrench, Square } from "lucide-react";
+import { Square } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { ScrollArea } from "./ui/scroll-area";
 import { MessageContent } from "./MessageContent";
