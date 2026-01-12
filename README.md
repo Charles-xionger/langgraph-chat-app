@@ -93,13 +93,17 @@ NEXT_PUBLIC_DASHSCOPE_API_KEY=sk-xxxx  # 语音输入功能
 
 ### 4. 启动数据库
 
-使用 Docker Compose 快速启动 PostgreSQL：
+**选项 A：使用 Docker Compose（推荐）**
 
 ```bash
 docker-compose up -d
 ```
 
-或手动安装 PostgreSQL 并创建数据库：
+PostgreSQL 容器会自动创建 `chat_db` 数据库，无需手动操作。
+
+**选项 B：手动安装 PostgreSQL**
+
+如果使用本地 PostgreSQL，需要手动创建数据库：
 
 ```sql
 CREATE DATABASE chat_db;
