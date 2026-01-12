@@ -338,7 +338,7 @@ export function MCPConfigPanel({
         open={deleteId !== null}
         onOpenChange={() => setDeleteId(null)}
       >
-        <AlertDialogContent className="!bg-[--stardew-cream] dark:!bg-[--stardew-dark-bg] stardew-box border-4 !border-[--stardew-wood-dark] dark:!border-[#8B6F47]">
+        <AlertDialogContent className="bg-[--stardew-cream]! dark:bg-[--stardew-dark-bg]! stardew-box border-4 border-[--stardew-wood-dark]! dark:border-[#8B6F47]!">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-[--stardew-text] dark:text-[--stardew-parchment] pixel-text-sm">
               确认删除
@@ -348,12 +348,12 @@ export function MCPConfigPanel({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-2 border-[--stardew-wood-dark] dark:border-[#8B6F47] text-[--stardew-text] dark:text-[--stardew-parchment] hover:bg-[#C78F56]/10 !bg-white dark:!bg-[--stardew-dark-bg]">
+            <AlertDialogCancel className="border-2 border-[--stardew-wood-dark] dark:border-[#8B6F47] text-[--stardew-text] dark:text-[--stardew-parchment] hover:bg-[#C78F56]/10 bg-white! dark:bg-[--stardew-dark-bg]!">
               取消
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && handleDelete(deleteId)}
-              className="!bg-red-500 hover:!bg-red-600 text-white"
+              className="bg-red-500! hover:bg-red-600! text-white"
             >
               删除
             </AlertDialogAction>
