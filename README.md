@@ -89,7 +89,7 @@ SERPAPI_API_KEY=xxxx  # 网页搜索功能
 NEXT_PUBLIC_DASHSCOPE_API_KEY=sk-xxxx  # 语音输入功能
 ```
 
-完整配置说明请参考 `.env.local.example` 文件。
+完整配置说明请参考 `.env.example` 文件。
 
 ### 4. 启动数据库
 
