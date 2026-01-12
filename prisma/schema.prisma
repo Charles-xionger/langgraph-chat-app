@@ -20,3 +20,13 @@ model Thread {
   updatedAt DateTime @updatedAt
 }
 
+model MCPConfig {
+  id          String   @id @default(uuid())
+  name        String
+  url         String
+  description String?
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+

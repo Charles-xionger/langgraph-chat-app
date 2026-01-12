@@ -12,9 +12,11 @@ import {
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { ReactNode } from "react";
+import { MCPConfigDialog } from "./mcp/MCPConfigDialog";
 
 export default function SettingsPopover({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const [mcpDialogOpen, setMcpDialogOpen] = useState(false);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -66,7 +68,13 @@ export default function SettingsPopover({ children }: { children: ReactNode }) {
               <ChevronRight className="h-4 w-4 ml-auto text-[--stardew-wood] dark:text-[--stardew-wood-light]" />
             </button>
 
-            <button className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-[#C78F56]/20 dark:hover:bg-[#C78F56]/10 rounded transition-colors text-[--stardew-text] dark:text-[--stardew-parchment]">
+            <button
+              onClick={() => {
+                setMcpDialogOpen(true);
+                setOpen(false);
+              }}
+              className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-[#C78F56]/20 dark:hover:bg-[#C78F56]/10 rounded transition-colors text-[--stardew-text] dark:text-[--stardew-parchment]"
+            >
               <Wrench className="h-4 w-4 text-[--stardew-wood]" />
               <span>🔧 MCP Tools</span>
               <ChevronRight className="h-4 w-4 ml-auto text-[--stardew-wood] dark:text-[--stardew-wood-light]" />
@@ -97,6 +105,7 @@ export default function SettingsPopover({ children }: { children: ReactNode }) {
           </div>
         </div>
       </PopoverContent>
+      <MCPConfigDialog open={mcpDialogOpen} onOpenChange={setMcpDialogOpen} />
     </Popover>
   );
 }

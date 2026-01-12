@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import {
   useGetThreads,
@@ -13,6 +13,7 @@ import { MessageList } from "./MessageList";
 import Composer from "./Composer";
 import Junimo from "./Junimo";
 import { CHATBOT_MODELS } from "@/lib/constants";
+import { useModelStore } from "@/stores/modelStore";
 
 interface ChatPaneProps {
   threadId: string;
@@ -28,38 +29,39 @@ export default function ChatPane({
   const [awaitingFirstResponse, setAwaitingFirstResponse] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
 
-  // 获取默认模型配置（第一个模型）
-  const defaultModel = CHATBOT_MODELS[0];
-  const [selectedModel, setSelectedModel] = useState(defaultModel.name);
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(
-    defaultModel.provider
-  );
-  const [selectedModelId, setSelectedModelId] = useState<string | undefined>(
-    defaultModel.model
-  );
+  // 使用 zustand store 管理模型配置
+  const { selectedModel, selectedProvider, selectedModelId, setModel } =
+    useModelStore();
+
   const { data: threads } = useGetThreads();
   const { data: messages, isLoading: isLoadingHistory } =
     useHistoryMessages(threadId);
 
   const { isSending, isReceiving, sendMessage, cancel, resumeExecution } =
-    useStreamedMessages(threadId);
+    useStreamedMessages(threadId, {
+      provider: selectedProvider || undefined,
+      model: selectedModelId,
+    });
 
   // 处理 interrupt 响应
   const handleInterruptRespond = async (
     interruptId: string,
     response: string
   ) => {
-    console.log("🔔 Handling interrupt response:", { interruptId, response });
-
     // 将响应映射为 allowTool 参数
     const allowTool = response === "approve" ? "allow" : "deny";
+
+    // 如果批准，重新显示 thinking 状态
+    if (allowTool === "allow") {
+      setIsThinking(true);
+    }
 
     try {
       // 调用 resumeExecution 继续执行
       await resumeExecution(allowTool as "allow" | "deny");
-      console.log("✅ Interrupt response sent successfully");
     } catch (error) {
-      console.error("❌ Failed to respond to interrupt:", error);
+      console.error("Failed to respond to interrupt:", error);
+      setIsThinking(false);
     }
   };
 
@@ -114,9 +116,7 @@ export default function ChatPane({
     provider: string | null,
     modelId?: string
   ) => {
-    setSelectedModel(modelName);
-    setSelectedProvider(provider);
-    setSelectedModelId(modelId);
+    setModel(modelName, provider, modelId);
   };
 
   useEffect(() => {
@@ -137,19 +137,28 @@ export default function ChatPane({
     threadId,
   ]);
 
-  // 当收到第一条 AI 回复时，关闭 thinking 状态
+  // 当收到 AI 回复内容时，关闭 thinking 状态
   useEffect(() => {
     if (isThinking && isReceiving) {
-      setIsThinking(false);
-    }
-  }, [isThinking, isReceiving]);
+      // 检查是否有实际的 AI 响应内容（非工具调用）
+      const lastAIMessage = messages?.findLast((msg) => msg.type === "ai");
 
-  // 当发送完成但没有接收到回复时，也要关闭 thinking
-  useEffect(() => {
-    if (isThinking && !isSending && !isReceiving) {
-      setIsThinking(false);
+      if (lastAIMessage) {
+        const aiData = lastAIMessage.data as any;
+        const hasContent =
+          aiData?.content &&
+          (typeof aiData.content === "string"
+            ? aiData.content.trim()
+            : aiData.content.length > 0);
+        const hasToolCalls = aiData?.tool_calls && aiData.tool_calls.length > 0;
+
+        // 只有当有内容且不是纯工具调用时才关闭 thinking
+        if (hasContent && !hasToolCalls) {
+          setIsThinking(false);
+        }
+      }
     }
-  }, [isThinking, isSending, isReceiving]);
+  }, [isThinking, isReceiving, messages]);
 
   if (isLoadingHistory) {
     return (

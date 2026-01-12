@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
   const provider = searchParams.get("provider");
   const model = searchParams.get("model");
   const allowTool = searchParams.get("allowTool") as "allow" | "deny" | null;
+  const mcpUrl = searchParams.get("mcpUrl");
 
   console.log("Stream GET request received:", {
     threadId,
@@ -19,6 +20,7 @@ export async function GET(request: NextRequest) {
     provider,
     model,
     allowTool,
+    mcpUrl,
   });
 
   if (!threadId || typeof userContent !== "string") {
@@ -65,6 +67,7 @@ export async function GET(request: NextRequest) {
               provider: provider || undefined,
               model: model || undefined,
               allowTool: allowTool || undefined,
+              mcpUrl: mcpUrl || undefined,
             },
           });
 
@@ -136,7 +139,16 @@ export async function GET(request: NextRequest) {
 // POST 接口 - 支持文件上传的消息请求和恢复被 interrupt 暂停的执行
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { threadId, content, provider, model, allowTool, files, value } = body;
+  const {
+    threadId,
+    content,
+    provider,
+    model,
+    allowTool,
+    files,
+    value,
+    mcpUrl,
+  } = body;
 
   if (!threadId) {
     return NextResponse.json(
@@ -165,6 +177,7 @@ export async function POST(request: NextRequest) {
     model,
     allowTool,
     files: files?.length || 0,
+    mcpUrl,
   });
 
   const encoder = new TextEncoder();
@@ -190,7 +203,7 @@ export async function POST(request: NextRequest) {
         const iterable = await streamResponse({
           threadId,
           userText: content,
-          opts: { provider, model, allowTool, files },
+          opts: { provider, model, allowTool, files, mcpUrl },
         });
 
         for await (const chunk of iterable) {

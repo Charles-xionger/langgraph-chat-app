@@ -91,6 +91,7 @@ export async function createMessageStream(
         model: opts.model,
         allowTool: opts.allowTool,
         files: opts.files,
+        mcpUrl: opts.mcpUrl,
       }),
     });
 
@@ -191,6 +192,10 @@ export async function createMessageStream(
   // 添加 allowTool 参数用于恢复 interrupt 执行
   if (opts?.allowTool) {
     queryParams.append("allowTool", opts.allowTool);
+  }
+  // 添加 mcpUrl 参数
+  if (opts?.mcpUrl) {
+    queryParams.append("mcpUrl", opts.mcpUrl);
   }
 
   return new EventSource(`${API_BASE_URL}/stream?${queryParams.toString()}`);

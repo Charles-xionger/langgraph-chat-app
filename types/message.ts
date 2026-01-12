@@ -22,6 +22,7 @@ export interface MessageOptions {
   allowTool?: "allow" | "deny";
   approveAllTools?: boolean; // if true, skip tool approval prompts
   files?: AttachmentFile[]; // 多模态文件支持
+  mcpUrl?: string; // MCP server URL for external tools
 }
 
 export interface BasicMessageData {

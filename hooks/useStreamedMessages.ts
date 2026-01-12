@@ -8,7 +8,10 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export function useStreamedMessages(threadId?: string) {
+export function useStreamedMessages(
+  threadId?: string,
+  currentConfig?: { provider?: string; model?: string }
+) {
   const queryClient = useQueryClient();
 
   const streamRef = useRef<EventSource | null>(null);
@@ -229,6 +232,23 @@ export function useStreamedMessages(threadId?: string) {
 
       const tempId = `temp-${Date.now()}`;
 
+      // 获取选中的 MCP 配置
+      let mcpUrl: string | undefined = undefined;
+      try {
+        const selectedMcpId = localStorage.getItem("selectedMcpId");
+        if (selectedMcpId) {
+          // 从 API 获取配置详情
+          const response = await fetch(`/api/mcp/configs/${selectedMcpId}`);
+          if (response.ok) {
+            const data = await response.json();
+            mcpUrl = data.config?.url;
+            console.log("🔧 Using MCP URL:", mcpUrl);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load MCP config:", error);
+      }
+
       // 构建多模态内容
       let content: string | MultiModalContent[] = text;
       if (files && files.length > 0) {
@@ -267,6 +287,7 @@ export function useStreamedMessages(threadId?: string) {
       const messageOptions: MessageOptions = {
         ...opts,
         ...(files && files.length > 0 && { files }),
+        ...(mcpUrl && { mcpUrl }),
       };
 
       await handleStreamResponse({
@@ -295,6 +316,25 @@ export function useStreamedMessages(threadId?: string) {
 
       console.log("🔄 Resuming execution with:", { threadId, allowTool });
 
+      // 获取当前的配置（provider、model、mcpUrl）
+      let mcpUrl: string | undefined = undefined;
+      try {
+        const selectedMcpId = localStorage.getItem("selectedMcpId");
+        if (selectedMcpId) {
+          const response = await fetch(`/api/mcp/configs/${selectedMcpId}`);
+          if (response.ok) {
+            const data = await response.json();
+            mcpUrl = data.config?.url;
+            console.log("🔧 Resume with MCP URL:", mcpUrl);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load MCP config:", error);
+      }
+
+      // TODO: 从 UI context 中获取当前选择的 provider 和 model
+      // 暂时先不传，如果需要可以添加
+
       // 先移除 interrupt 消息，避免重复显示
       queryClient.setQueryData(
         ["messages", threadId],
@@ -311,6 +351,9 @@ export function useStreamedMessages(threadId?: string) {
         text: "", // 空字符串，因为这是恢复操作，不是新消息
         opts: {
           allowTool,
+          mcpUrl,
+          provider: currentConfig?.provider,
+          model: currentConfig?.model,
         },
       });
     },

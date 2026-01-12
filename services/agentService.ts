@@ -8,7 +8,7 @@ import { ensureThread } from "@/lib/thread";
 import { BaseMessage, HumanMessage } from "langchain";
 import { ensureAgent } from "@/lib/agent";
 import prisma from "@/lib/database/pirsma";
-import { getHistory } from "@/lib/agent/memory";
+import { getHistory, postgresCheckpointer } from "@/lib/agent/memory";
 import { Command } from "@langchain/langgraph";
 
 /**
@@ -291,18 +291,32 @@ export async function streamResponse(params: {
 
   console.log("📝 Prepared inputs for agent:", inputs);
 
+  // 配置参数直接使用，不需要从数据库恢复（前端会在每次请求时传递）
+  const provider = opts?.provider;
+  const model = opts?.model;
+  const mcpUrl = opts?.mcpUrl;
+
+  console.log("🔧 Creating agent with config:", { provider, model, mcpUrl });
+
   // 创建或获取一个按所选 provider/model/tools 配置的 agent 实例。
   // `ensureAgent` 会构建一个 AgentBuilder，并将工具绑定到 LLM 上。
   const agent = await ensureAgent({
-    provider: opts?.provider,
-    model: opts?.model,
+    provider: provider,
+    model: model,
     tools: opts?.tools,
     approveAllTools: opts?.approveAllTools,
+    mcpUrl: mcpUrl,
   });
 
   // Type assertion needed for Command union with state update in v1
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let configurable = { thread_id: threadId };
+  let configurable = {
+    thread_id: threadId,
+    // 保存完整配置到 checkpoint，以便恢复时使用
+    ...(provider && { provider }),
+    ...(model && { model }),
+    ...(mcpUrl && { mcpUrl }),
+  };
   let iterable: any;
 
   try {
@@ -490,8 +504,18 @@ export async function streamResponse(params: {
           ? (chunkData as any).tools.messages
           : [(chunkData as any).tools.messages];
 
+        console.log("🔧 Tool messages received:", messages.length);
+
         for (const message of messages) {
           if (!message) continue;
+
+          // 打印工具消息详情
+          console.log("🔧 Tool message details:", {
+            type: message?.constructor?.name,
+            content: message?.content,
+            tool_call_id: (message as any)?.tool_call_id,
+            name: (message as any)?.name,
+          });
 
           // 处理工具消息
           const isToolMessage = message?.constructor?.name === "ToolMessage";
