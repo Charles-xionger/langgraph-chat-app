@@ -78,10 +78,10 @@ ALIYUN_API_KEY=sk-xxxx
 # 或
 GOOGLE_API_KEY=AIzaSyAxxxx
 
-# 必填：数据库配置
-DATABASE_URL="postgresql://postgres:example@localhost:5432/chat_db?schema=public"
+# 必填：数据库配置（需与 docker-compose.yml 一致）
+DATABASE_URL="postgresql://postgres:chat_db_password_2024@localhost:5432/chat_db?schema=public"
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=example
+POSTGRES_PASSWORD=chat_db_password_2024
 POSTGRES_DB=chat_db
 
 # 可选：其他功能
