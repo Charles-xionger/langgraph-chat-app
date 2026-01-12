@@ -91,9 +91,9 @@ NEXT_PUBLIC_DASHSCOPE_API_KEY=sk-xxxx  # 语音输入功能
 
 完整配置说明请参考 `.env.example` 文件。
 
-### 4. 启动数据库
+### 4. 配置数据库
 
-**选项 A：使用 Docker Compose（推荐）**
+**选项 A：使用 Docker Compose（本地开发推荐）**
 
 ```bash
 docker-compose up -d
@@ -101,7 +101,32 @@ docker-compose up -d
 
 PostgreSQL 容器会自动创建 `chat_db` 数据库，无需手动操作。
 
-**选项 B：手动安装 PostgreSQL**
+**选项 B：使用 Supabase（生产环境推荐）**
+
+1. 在 [Supabase](https://supabase.com/) 创建项目
+2. 获取连接字符串：Dashboard -> Settings -> Database -> Connection String (URI)
+3. 选择 "Direct Connection" 并复制连接字符串
+4. **重要**：如果密码包含特殊字符，需要 URL 编码：
+
+```bash
+# 特殊字符编码对照表
+@ -> %40
+# -> %23
+% -> %25
+& -> %26
+: -> %3A
+/ -> %2F
+? -> %3F
+```
+
+5. 更新 `.env` 文件中的 `DATABASE_URL`：
+
+```env
+# 示例（密码已编码）
+DATABASE_URL="postgresql://postgres:your%40encoded%23password@db.xxxxxxxxxxxxx.supabase.co:5432/postgres"
+```
+
+**选项 C：手动安装 PostgreSQL**
 
 如果使用本地 PostgreSQL，需要手动创建数据库：
 
@@ -216,9 +241,160 @@ chat-app/
 - `voice-input-guide.md` - 语音输入使用指南
 - `stardew-valley-design-system.md` - 设计系统文档
 
+## 🚀 生产环境部署
+
+### Vercel 部署
+
+项目已配置支持 Vercel 流式响应。部署步骤：
+
+1. **连接 Git 仓库**
+
+   - 在 Vercel Dashboard 导入项目
+   - 授权访问 GitHub/GitLab 仓库
+
+2. **配置环境变量**
+
+   - 在 Vercel 项目设置中添加所有必要的环境变量
+   - 特别注意：`DATABASE_URL` 使用 Supabase 连接字符串
+   - 密码中的特殊字符必须 URL 编码（参考上文数据库配置）
+
+3. **部署配置**
+
+   - Build Command: `pnpm run build`
+   - Output Directory: `.next`
+   - Install Command: `pnpm install`
+
+4. **数据库迁移**
+   - 首次部署后，在 Vercel 项目设置中添加 Build Command：
+   ```bash
+   pnpm prisma migrate deploy && pnpm run build
+   ```
+
+### 重要配置说明
+
+**next.config.ts 已包含以下关键配置：**
+
+```typescript
+experimental: {
+  serverComponentsExternalPackages: [
+    "@langchain/core",
+    "@langchain/langgraph",
+    // ... 其他包
+  ],
+}
+```
+
+这个配置确保：
+
+- ✅ LangChain/LangGraph 在 Vercel Edge Runtime 正常工作
+- ✅ 流式响应不被缓冲，实时返回给前端
+- ✅ Prisma Client 正确初始化
+
+**流式响应 headers（已在 route.ts 中配置）：**
+
+```typescript
+headers: {
+  "Content-Type": "text/event-stream; charset=utf-8",
+  "Cache-Control": "no-cache, no-transform",
+  "Connection": "keep-alive",
+  "X-Accel-Buffering": "no", // 关键：禁用 Nginx 缓冲
+}
+```
+
+### 故障排查：流式响应不工作
+
+如果在生产环境遇到前端一直 thinking、刷新后才看到消息的问题：
+
+1. **检查 next.config.ts**
+
+   - 确认 `experimental.serverComponentsExternalPackages` 包含所有 LangChain 包
+
+2. **检查环境变量**
+
+   ```bash
+   # 在 Vercel 中验证环境变量
+   DATABASE_URL=postgresql://...
+   OPENAI_API_KEY=sk-...
+   # 等等
+   ```
+
+3. **检查 Vercel 函数日志**
+
+   - 在 Vercel Dashboard -> Deployments -> Functions 查看日志
+   - 确认后端有生成响应数据
+
+4. **强制重新部署**
+
+   ```bash
+   # 推送一个空 commit 触发重新部署
+   git commit --allow-empty -m "Redeploy"
+   git push
+   ```
+
+5. **检查 Vercel 函数超时设置**
+   - 免费版限制 10s，Pro 版本默认 60s
+   - 确保 `maxDuration = 60` 在 route.ts 中已设置
+
+### 其他平台部署
+
+**Docker 部署：**
+
+项目支持 Docker 容器化部署。创建 `Dockerfile`：
+
+```dockerfile
+FROM node:18-alpine
+
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml ./
+RUN npm install -g pnpm && pnpm install
+
+COPY . .
+RUN pnpm prisma generate
+RUN pnpm run build
+
+EXPOSE 3000
+
+CMD ["sh", "-c", "pnpm prisma migrate deploy && pnpm start"]
+```
+
+构建并运行：
+
+```bash
+docker build -t chat-app .
+docker run -p 3000:3000 --env-file .env chat-app
+```
+
 ## 🐛 常见问题
 
-### 1. 数据库连接失败
+### 1. 数据库连接失败 - "invalid port number"
+
+**错误**：`P1013: The provided database string is invalid. invalid port number in database URL`
+
+**原因**：Supabase 连接字符串中的密码包含特殊字符未编码。
+
+**解决方案**：
+
+1. 找到你的 Supabase 密码（Dashboard -> Settings -> Database -> Database Password -> Reset）
+2. 使用在线工具或命令行编码密码：
+
+```bash
+# 使用 Node.js 编码
+node -e "console.log(encodeURIComponent('your-password'))"
+
+# 或使用 Python
+python3 -c "import urllib.parse; print(urllib.parse.quote('your-password', safe=''))"
+```
+
+3. 将编码后的密码替换到连接字符串中：
+
+```env
+# 原密码: MyP@ss#123
+# 编码后: MyP%40ss%23123
+DATABASE_URL="postgresql://postgres:MyP%40ss%23123@db.xxxxx.supabase.co:5432/postgres"
+```
+
+### 2. Docker 数据库连接失败
 
 检查 PostgreSQL 是否运行：
 
@@ -228,18 +404,18 @@ docker-compose ps
 pg_isready -h localhost -p 5432
 ```
 
-### 2. MCP 工具加载缓慢
+### 3. MCP 工具加载缓慢
 
 首次加载会从服务器获取工具列表，后续请求会使用缓存。如需清除缓存，重启服务即可。
 
-### 3. 工具调用失败
+### 4. 工具调用失败
 
 确保配置了对应的 API Key：
 
 - 网页搜索需要 `SERPAPI_API_KEY`
 - 语音识别需要 `NEXT_PUBLIC_DASHSCOPE_API_KEY`
 
-### 4. 模型切换不生效
+### 5. 模型切换不生效
 
 检查是否配置了对应模型的 API Key，并在 Zustand store 中正确保存了配置。
 
