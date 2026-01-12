@@ -108,7 +108,7 @@ export function MainLayout({ children }: MainLayoutProps) {
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent className="!bg-[--stardew-cream] dark:!bg-[--stardew-dark-bg] stardew-box border-4 !border-[--stardew-wood-dark] dark:!border-[#8B6F47]">
+        <AlertDialogContent className="bg-[--stardew-cream]! dark:bg-[--stardew-dark-bg]! stardew-box border-4 border-[--stardew-wood-dark]! dark:border-[#8B6F47]!">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-[--stardew-text] dark:text-[--stardew-parchment] pixel-text-sm">
               🗑️ Delete Thread
@@ -119,12 +119,12 @@ export function MainLayout({ children }: MainLayoutProps) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="stardew-btn !bg-[#8B7355] hover:!bg-[#A05030] dark:!bg-[#6B4423] dark:hover:!bg-[#8B7355] text-white border-[#6B4423] dark:border-[#552814]">
+            <AlertDialogCancel className="stardew-btn bg-[#8B7355]! hover:bg-[#A05030]! dark:bg-[#6B4423]! dark:hover:bg-[#8B7355]! text-white border-[#6B4423] dark:border-[#552814]">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
-              className="stardew-btn !bg-gradient-to-b !from-[#D84545] !to-[#B83838] hover:!from-[#E05555] hover:!to-[#C84848] dark:!from-[#B83838] dark:!to-[#A02828] dark:hover:!from-[#C84848] dark:hover:!to-[#B03838] text-white border-[#8B2828] dark:border-[#6B1818]"
+              className="stardew-btn bg-linear-to-b! from-[#D84545]! to-[#B83838]! hover:from-[#E05555]! hover:to-[#C84848]! dark:from-[#B83838]! dark:to-[#A02828]! dark:hover:from-[#C84848]! dark:hover:to-[#B03838]! text-white border-[#8B2828] dark:border-[#6B1818]"
             >
               Delete
             </AlertDialogAction>

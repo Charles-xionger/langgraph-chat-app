@@ -375,8 +375,10 @@ export async function streamResponse(params: {
           Record<string, any>
         >;
 
-        for (const intr of interrupts) {
-          const interruptValue = intr?.value;
+        // 只处理第一个 interrupt，避免重复发送
+        const firstInterrupt = interrupts[0];
+        if (firstInterrupt) {
+          const interruptValue = firstInterrupt?.value;
           console.log(
             "🔔 Interrupt value:",
             JSON.stringify(interruptValue, null, 2)
@@ -417,12 +419,10 @@ export async function streamResponse(params: {
             };
 
             console.log("🔔 Interrupt message yielded, stopping stream");
-            // interrupt 后停止流，等待用户响应
-            break;
           }
         }
-        // 如果检测到 interrupt，跳过后续的消息处理，等待下一个 chunk
-        continue;
+        // interrupt 后停止流，等待用户响应
+        return;
       }
 
       // 2) 处理 approval 节点的消息（ToolMessage，用于拒绝反馈）

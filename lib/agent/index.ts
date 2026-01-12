@@ -25,25 +25,8 @@ async function setupOnce() {
   await setupPromise;
 }
 
-// Agent 缓存
-const agentCache = new Map<string, Awaited<ReturnType<typeof createAgent>>>();
-
-// MCP 工具缓存
+// MCP 工具缓存 - 保留以提高 MCP 工具加载性能
 const mcpToolsCache = new Map<string, DynamicTool[]>();
-
-/**
- * 生成缓存 key，基于配置参数
- */
-function getCacheKey(config?: AgentConfigOptions): string {
-  const provider = config?.provider || "openai";
-  const model =
-    config?.model ||
-    (provider === "aliyun" ? process.env.ALIYUN_MODEL_NAME : "gpt-4.1");
-  const mcpUrl = config?.mcpUrl || "";
-  const approveAllTools = config?.approveAllTools ? "approve" : "manual";
-
-  return `${provider}:${model}:${mcpUrl}:${approveAllTools}`;
-}
 
 /**
  *
@@ -106,16 +89,21 @@ function createEmbeddingsModel() {
 
 /**
  * 创建新的 agent 实例根据提供的配置
+ * 注意：每次调用都会创建新实例，避免 Vercel Serverless 多实例间的状态污染
  *
  * @param config - 配置对象
  * @returns 新的 agent 实例
  */
-
 export async function createAgent(config?: AgentConfigOptions) {
   const provider = config?.provider || "openai";
   const model =
     config?.model ||
     (provider === "aliyun" ? process.env.ALIYUN_MODEL_NAME : "gpt-4.1");
+
+  console.log(
+    `🆕 Creating new agent instance - Provider: ${provider}, Model: ${model}`
+  );
+
   const llm = createChatModel({ provider, model });
 
   // MCP Tools - 从配置中获取 MCP URL
@@ -176,42 +164,24 @@ export async function createAgent(config?: AgentConfigOptions) {
     checkpointer: postgresCheckpointer,
   }).buildWithApproval(); // 使用带审批功能的构建方法，支持工具调用审批
 
+  console.log(`✅ Agent instance created successfully`);
+
   return agent;
 }
 
-// 公共辅助函数，用于显式检查准备状态并返回 Agent 实例
+/**
+ * 确保 checkpointer 已初始化并创建新的 agent 实例
+ * 注意：不再使用缓存，每次都创建新实例以避免 Vercel 多实例状态问题
+ */
 export async function ensureAgent(config?: AgentConfigOptions) {
-  // 确保 checkpointer 已经完成初始化后再返回 Agent 实例
+  // 确保 checkpointer 已经完成初始化
   await setupOnce();
 
-  // 生成缓存 key
-  const cacheKey = getCacheKey(config);
-
-  // 检查缓存
-  if (agentCache.has(cacheKey)) {
-    console.log(`✅ 使用缓存的 Agent: ${cacheKey}`);
-    return agentCache.get(cacheKey)!;
-  }
-
-  // 创建新 agent 并缓存
-  console.log(`🆕 创建新的 Agent: ${cacheKey}`);
-  const agent = await createAgent(config);
-  agentCache.set(cacheKey, agent);
-
-  return agent;
+  // 直接创建新的 agent 实例，不使用缓存
+  return await createAgent(config);
 }
 
 // 显式获取配置好的 Agent 的命名导出
 export async function getAgent(config?: AgentConfigOptions) {
   return ensureAgent(config);
-}
-
-// 移除顶层 await，改为懒加载
-let cachedAgent: Awaited<ReturnType<typeof ensureAgent>> | null = null;
-
-export async function getDefaultAgent() {
-  if (!cachedAgent) {
-    cachedAgent = await ensureAgent();
-  }
-  return cachedAgent;
 }
