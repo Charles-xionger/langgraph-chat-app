@@ -419,6 +419,18 @@ pg_isready -h localhost -p 5432
 
 检查是否配置了对应模型的 API Key，并在 Zustand store 中正确保存了配置。
 
+### 6. 工具调用 interrupt 触发多次
+
+**问题**：本地环境工具审批只触发一次，但生产环境触发多次。
+
+**原因**：LangGraph 的 `__interrupt__` 可能包含多个元素，或者由于缓冲导致重复处理。
+
+**解决方案**：已在 `agentService.ts` 中优化，只处理第一个 interrupt 并立即停止流。如果仍有问题：
+
+1. 检查前端是否有重复的事件监听器
+2. 确认 `vercel.json` 中的 `X-Accel-Buffering: no` 配置生效
+3. 查看浏览器 Network 面板，确认只有一个 SSE 连接
+
 ## 🤝 贡献指南
 
 欢迎提交 Issue 和 Pull Request！
