@@ -10,6 +10,11 @@ import { ensureAgent } from "@/lib/agent";
 import prisma from "@/lib/database/pirsma";
 import { getHistory, postgresCheckpointer } from "@/lib/agent/memory";
 import { Command } from "@langchain/langgraph";
+import {
+  ExternalServiceError,
+  FileUploadError,
+  ValidationError,
+} from "@/lib/errors";
 
 /**
  * 清理线程中未完成的工具调用
@@ -59,13 +64,17 @@ async function cleanupIncompleteToolCalls(threadId: string) {
 
 /**
  * 将 URL 转换为 data URL (base64)
+ * @throws {ExternalServiceError} 当文件获取失败时
  */
-async function convertUrlToDataUrl(url: string): Promise<string | null> {
+async function convertUrlToDataUrl(url: string): Promise<string> {
   try {
     const response = await fetch(url);
     if (!response.ok) {
-      console.error(`Failed to fetch file from URL: ${response.status}`);
-      return null;
+      throw new ExternalServiceError(
+        `Failed to fetch file: ${response.statusText}`,
+        "File Storage",
+        response.status === 404 ? 502 : 503,
+      );
     }
 
     const blob = await response.blob();
@@ -76,18 +85,27 @@ async function convertUrlToDataUrl(url: string): Promise<string | null> {
 
     return `data:${mimeType};base64,${base64}`;
   } catch (error) {
-    console.error("Error converting URL to data URL:", error);
-    return null;
+    if (error instanceof ExternalServiceError) {
+      throw error;
+    }
+    throw new ExternalServiceError(
+      "Failed to convert URL to data URL",
+      "File Storage",
+      502,
+      error,
+    );
   }
 }
 
 /**
  * 创建支持多模态的HumanMessage
  * 按照 LangChain 官方规范处理多模态内容
+ * @throws {ValidationError} 当文件格式无效时
+ * @throws {FileUploadError} 当文件处理失败时
  */
 async function createHumanMessage(
   text: string,
-  files?: AttachmentFile[]
+  files?: AttachmentFile[],
 ): Promise<HumanMessage> {
   if (!files || files.length === 0) {
     return new HumanMessage(text);
@@ -189,14 +207,16 @@ async function createHumanMessage(
         });
       } else if (file.source_type === "url" && file.url) {
         // 视频文件通常需要 base64 格式，尝试转换
-        const dataUrl = await convertUrlToDataUrl(file.url);
-        if (dataUrl) {
+        try {
+          const dataUrl = await convertUrlToDataUrl(file.url);
           content.push({
             type: "video",
             source_type: "base64",
             data: dataUrl,
           });
-        } else {
+        } catch (error) {
+          // 转换失败，添加文本说明
+          console.warn(`Failed to convert video URL for ${file.name}:`, error);
           content.push({
             type: "text",
             text: `视频文件：${file.name}，下载链接：${file.url}`,
@@ -330,7 +350,7 @@ export async function streamResponse(params: {
 
     const streamInitTime = Date.now() - streamStartTime;
     console.log(
-      `⏱️  [TIMING] agent.stream() returned iterable in ${streamInitTime}ms`
+      `⏱️  [TIMING] agent.stream() returned iterable in ${streamInitTime}ms`,
     );
   } catch (error: any) {
     // 如果是工具调用相关错误，使用新的线程ID重试
@@ -352,7 +372,7 @@ export async function streamResponse(params: {
 
       const retryTime = Date.now() - retryStartTime;
       console.log(
-        `⏱️  [TIMING] Retry agent.stream() returned in ${retryTime}ms`
+        `⏱️  [TIMING] Retry agent.stream() returned in ${retryTime}ms`,
       );
     } else {
       throw error;
@@ -365,7 +385,7 @@ export async function streamResponse(params: {
   async function* generator(): AsyncGenerator<MessageResponse, void, unknown> {
     console.log("🔄 Starting generator, allowTool:", opts?.allowTool);
     console.log(
-      "⏱️  [TIMING] Entering for-await loop, waiting for first chunk..."
+      "⏱️  [TIMING] Entering for-await loop, waiting for first chunk...",
     );
 
     const generatorStartTime = Date.now();
@@ -379,19 +399,11 @@ export async function streamResponse(params: {
       if (firstChunkTime === null) {
         firstChunkTime = Date.now() - generatorStartTime;
         console.log(
-          `⏱️  [TIMING] 🎉 First chunk received after ${firstChunkTime}ms`
+          `⏱️  [TIMING] 🎉 First chunk received after ${firstChunkTime}ms`,
         );
       }
 
       if (!chunk) continue;
-
-      // 轻量级日志：只打印关键信息，避免大对象序列化
-      if (Array.isArray(chunk) && chunk.length === 2) {
-        const [streamMode] = chunk;
-        console.log(
-          `📌 Processing streamMode: ${streamMode} (chunk #${chunkCount})`
-        );
-      }
 
       // 组合模式返回元组：[streamMode, data]
       if (!Array.isArray(chunk) || chunk.length !== 2) continue;
@@ -418,7 +430,7 @@ export async function streamResponse(params: {
             (Array.isArray(message.content) &&
               message.content.some(
                 (item: unknown) =>
-                  item && typeof item === "object" && "functionCall" in item
+                  item && typeof item === "object" && "functionCall" in item,
               )) ||
             ("tool_calls" in message &&
               Array.isArray(message.tool_calls) &&
@@ -431,7 +443,7 @@ export async function streamResponse(params: {
 
           // 只处理纯文本消息
           const processedMessage = processAIMessage(
-            message as Record<string, unknown>
+            message as Record<string, unknown>,
           );
           if (processedMessage) {
             yield processedMessage;
@@ -552,7 +564,7 @@ export async function streamResponse(params: {
             (Array.isArray(message.content) &&
               message.content.some(
                 (item: unknown) =>
-                  item && typeof item === "object" && "functionCall" in item
+                  item && typeof item === "object" && "functionCall" in item,
               )) ||
             ("tool_calls" in message &&
               Array.isArray(message.tool_calls) &&
@@ -562,12 +574,13 @@ export async function streamResponse(params: {
           // 这避免了 updates 模式重复发送普通文本消息
           if (hasToolCall) {
             const processedMessage = processAIMessage(
-              message as Record<string, unknown>
+              message as Record<string, unknown>,
             );
             // 再次确认返回的消息确实包含 tool_calls
             if (
               processedMessage &&
               processedMessage.type === "ai" &&
+              "tool_calls" in processedMessage.data &&
               processedMessage.data.tool_calls
             ) {
               yield processedMessage;
@@ -616,7 +629,7 @@ export async function streamResponse(params: {
     // 流结束时的统计
     const totalTime = Date.now() - generatorStartTime;
     console.log(
-      `⏱️  [TIMING] Stream completed - Total chunks: ${chunkCount}, Total time: ${totalTime}ms, First chunk: ${firstChunkTime}ms`
+      `⏱️  [TIMING] Stream completed - Total chunks: ${chunkCount}, Total time: ${totalTime}ms, First chunk: ${firstChunkTime}ms`,
     );
   }
   return generator();
@@ -624,7 +637,7 @@ export async function streamResponse(params: {
 
 // 辅助函数：处理任意 AI 消息并返回适当的 MessageResponse
 function processAIMessage(
-  message: Record<string, unknown>
+  message: Record<string, unknown>,
 ): MessageResponse | null {
   // 判断该 AI 消息是否为工具/函数调用。
   // LangGraph/或 LLM 的工具调用可能以结构化 content 表示（例如数组中包含 `functionCall` 字段），
@@ -634,7 +647,7 @@ function processAIMessage(
     (Array.isArray(message.content) &&
       message.content.some(
         (item: unknown) =>
-          item && typeof item === "object" && "functionCall" in item
+          item && typeof item === "object" && "functionCall" in item,
       )) ||
     // Or the tooling layer may attach a `tool_calls` field directly
     ("tool_calls" in message && Array.isArray((message as any).tool_calls));
@@ -668,7 +681,7 @@ function processAIMessage(
   } else if (Array.isArray(message.content)) {
     text = message.content
       .map((c: string | { text?: string }) =>
-        typeof c === "string" ? c : c?.text || ""
+        typeof c === "string" ? c : c?.text || "",
       )
       .join("");
   } else {
@@ -692,7 +705,7 @@ function processAIMessage(
 }
 
 export async function fetchThreadHistory(
-  threadId: string
+  threadId: string,
 ): Promise<MessageResponse[]> {
   const thread = await prisma.thread.findUnique({ where: { id: threadId } });
   if (!thread) return [];

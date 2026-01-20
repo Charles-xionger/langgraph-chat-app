@@ -1,6 +1,7 @@
 import prisma from "@/lib/database/pirsma";
 import { Thread } from "@/types/message";
 import { NextRequest, NextResponse } from "next/server";
+import { ValidationError, withErrorHandler } from "@/lib/errors";
 
 type ThreadEntity = {
   id: string;
@@ -13,7 +14,7 @@ type ThreadEntity = {
  * @description 获取所有线程的列表
  * @returns 线程列表的 JSON 响应
  */
-export async function GET() {
+export const GET = withErrorHandler(async () => {
   const dbThreads = await prisma.thread.findMany({
     orderBy: { updatedAt: "desc" },
     take: 50, // 限制返回的线程数量
@@ -26,14 +27,14 @@ export async function GET() {
     updatedAt: t.updatedAt.toISOString(),
   }));
 
-  return NextResponse.json(threads, { status: 200 });
-}
+  return NextResponse.json({ success: true, data: threads }, { status: 200 });
+});
 
 /**
  * @description 创建一个新的线程
  * @returns 新创建的线程的 JSON 响应
  */
-export async function POST() {
+export const POST = withErrorHandler(async () => {
   // 生成友好的时间标题
   const now = new Date();
   const timeStr = now.toLocaleTimeString("zh-CN", {
@@ -56,65 +57,58 @@ export async function POST() {
     updatedAt: createdThread.updatedAt.toISOString(),
   };
 
-  return NextResponse.json(thread, { status: 201 });
-}
+  return NextResponse.json({ success: true, data: thread }, { status: 201 });
+});
 
-export async function PATCH(request: NextRequest) {
-  try {
-    const body = await request.json();
+export const PATCH = withErrorHandler(async (request: NextRequest) => {
+  const body = await request.json();
 
-    const { threadId, title } = body || {};
+  const { threadId, title } = body || {};
 
-    if (!threadId || typeof title !== "string") {
-      return NextResponse.json(
-        { message: "Invalid request body." },
-        { status: 400 }
-      );
-    }
-
-    const updatedThread = await prisma.thread.update({
-      where: { id: threadId },
-      data: { title },
+  if (!threadId || typeof title !== "string") {
+    throw new ValidationError("Invalid request body", {
+      threadId: !threadId ? ["threadId is required"] : [],
+      title: typeof title !== "string" ? ["title must be a string"] : [],
     });
+  }
 
-    return NextResponse.json(
-      {
+  const updatedThread = await prisma.thread.update({
+    where: { id: threadId },
+    data: { title },
+  });
+
+  return NextResponse.json(
+    {
+      success: true,
+      data: {
         id: updatedThread.id,
         title: updatedThread.title,
         createdAt: updatedThread.createdAt.toISOString(),
         updatedAt: updatedThread.updatedAt.toISOString(),
       },
-      { status: 200 }
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Update failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
-}
+    },
+    { status: 200 },
+  );
+});
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const body = await request.json();
+export const DELETE = withErrorHandler(async (request: NextRequest) => {
+  const body = await request.json();
 
-    const { threadId } = body || {};
+  const { threadId } = body || {};
 
-    if (!threadId || typeof threadId !== "string") {
-      return NextResponse.json(
-        { error: "Invalid request body." },
-        { status: 400 }
-      );
-    }
-
-    await prisma.thread.delete({
-      where: { id: threadId },
+  if (!threadId || typeof threadId !== "string") {
+    throw new ValidationError("Invalid threadId", {
+      threadId: ["threadId is required and must be a string"],
     });
-
-    return NextResponse.json(
-      { message: "Thread deleted successfully." },
-      { status: 200 }
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Delete failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+
+  // Prisma 会自动抛出 P2025 错误，会被 handlePrismaError 捕获并转换为 NotFoundError
+  await prisma.thread.delete({
+    where: { id: threadId },
+  });
+
+  return NextResponse.json(
+    { success: true, message: "Thread deleted successfully" },
+    { status: 200 },
+  );
+});

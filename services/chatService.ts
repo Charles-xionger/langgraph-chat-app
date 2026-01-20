@@ -9,7 +9,8 @@ export async function getThreads(): Promise<Thread[]> {
   if (!response.ok) {
     throw new Error("Failed to fetch threads");
   }
-  return response.json();
+  const result = await response.json();
+  return result.data || [];
 }
 
 // 创建一个新的线程
@@ -21,13 +22,14 @@ export async function createThread(): Promise<Thread> {
   if (!response.ok) {
     throw new Error("Failed to create thread");
   }
-  return response.json();
+  const result = await response.json();
+  return result.data;
 }
 
 // 更新线程标题
 export async function updateThreadTitle(
   threadId: string,
-  title: string
+  title: string,
 ): Promise<Thread> {
   const response = await fetch(`${API_BASE_URL}/threads`, {
     method: "PATCH",
@@ -40,7 +42,8 @@ export async function updateThreadTitle(
   if (!response.ok) {
     throw new Error("Failed to update thread title");
   }
-  return response.json();
+  const result = await response.json();
+  return result.data;
 }
 
 // 删除线程
@@ -60,7 +63,7 @@ export async function deleteThread(threadId: string): Promise<void> {
 
 // 根据 threadId 获取 history messages
 export async function getThreadMessages(
-  threadId: string
+  threadId: string,
 ): Promise<MessageResponse[]> {
   const response = await fetch(`${API_BASE_URL}/history/${threadId}`);
 
@@ -75,7 +78,7 @@ export async function getThreadMessages(
 export async function createMessageStream(
   threadId: string,
   message: string,
-  opts?: MessageOptions
+  opts?: MessageOptions,
 ) {
   // 如果有文件，使用 POST 请求
   if (opts?.files && opts.files.length > 0) {
@@ -168,7 +171,7 @@ export async function createMessageStream(
             data: JSON.stringify({
               message: error instanceof Error ? error.message : "Unknown error",
             }),
-          })
+          }),
         );
       }
     })();

@@ -8,6 +8,7 @@ import { DynamicTool } from "langchain";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatAlibabaTongyi } from "@langchain/community/chat_models/alibaba_tongyi";
 import { MultiServerMCPClient } from "@langchain/mcp-adapters";
+import { MCPError, AgentError } from "@/lib/errors";
 
 // 用来标记是否已经开始设置
 let setupPromise: Promise<void> | null = null;
@@ -101,13 +102,14 @@ export async function createAgent(config?: AgentConfigOptions) {
     (provider === "aliyun" ? process.env.ALIYUN_MODEL_NAME : "gpt-4.1");
 
   console.log(
-    `🆕 Creating new agent instance - Provider: ${provider}, Model: ${model}`
+    `🆕 Creating new agent instance - Provider: ${provider}, Model: ${model}`,
   );
 
   const llm = createChatModel({ provider, model });
 
   // MCP Tools - 从配置中获取 MCP URL
   let mcptools: DynamicTool[] = [];
+  let mcpLoadError: MCPError | null = null;
 
   if (config?.mcpUrl) {
     // 先检查缓存
@@ -132,7 +134,7 @@ export async function createAgent(config?: AgentConfigOptions) {
 
         const loadTime = Date.now() - startTime;
         console.log(
-          `✅ 成功加载 ${mcptools.length} 个 MCP 工具 (耗时: ${loadTime}ms)`
+          `✅ 成功加载 ${mcptools.length} 个 MCP 工具 (耗时: ${loadTime}ms)`,
         );
 
         // 缓存工具
@@ -147,7 +149,14 @@ export async function createAgent(config?: AgentConfigOptions) {
           });
         });
       } catch (error) {
+        // 存储错误但不中断 Agent 创建，实现降级策略
+        mcpLoadError = new MCPError(
+          "Failed to load MCP tools - continuing with built-in tools only",
+          config.mcpUrl,
+          undefined,
+        );
         console.error("❌ 加载 MCP 工具失败:", error);
+        console.warn("⚠️  降级策略：将仅使用内置工具继续运行");
       }
     }
   }
@@ -164,7 +173,15 @@ export async function createAgent(config?: AgentConfigOptions) {
     checkpointer: postgresCheckpointer,
   }).buildWithApproval(); // 使用带审批功能的构建方法，支持工具调用审批
 
+  // 如果 MCP 加载失败，在 agent 上附加元数据供后续使用
+  if (mcpLoadError) {
+    (agent as any).mcpLoadError = mcpLoadError;
+  }
+
   console.log(`✅ Agent instance created successfully`);
+  console.log(
+    `📊 工具统计: 内置工具 ${internalTools.length} 个, MCP工具 ${mcptools.length} 个`,
+  );
 
   return agent;
 }
@@ -172,13 +189,21 @@ export async function createAgent(config?: AgentConfigOptions) {
 /**
  * 确保 checkpointer 已初始化并创建新的 agent 实例
  * 注意：不再使用缓存，每次都创建新实例以避免 Vercel 多实例状态问题
+ * @throws {AgentError} 当 Agent 初始化失败时
  */
 export async function ensureAgent(config?: AgentConfigOptions) {
-  // 确保 checkpointer 已经完成初始化
-  await setupOnce();
+  try {
+    // 确保 checkpointer 已经完成初始化
+    await setupOnce();
 
-  // 直接创建新的 agent 实例，不使用缓存
-  return await createAgent(config);
+    // 直接创建新的 agent 实例，不使用缓存
+    return await createAgent(config);
+  } catch (error) {
+    throw new AgentError("Failed to initialize agent", {
+      provider: config?.provider,
+      model: config?.model,
+    });
+  }
 }
 
 // 显式获取配置好的 Agent 的命名导出

@@ -4,6 +4,10 @@ export const dynamic = "force-dynamic";
 import { streamResponse } from "@/services/agentService";
 import { MessageResponse } from "@/types/message";
 import { NextRequest, NextResponse } from "next/server";
+import { ValidationError, formatStreamError } from "@/lib/errors";
+
+// 流式超时时间 (50秒)
+const STREAM_TIMEOUT = 50000;
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -23,11 +27,13 @@ export async function GET(request: NextRequest) {
     mcpUrl,
   });
 
+  // 参数验证
   if (!threadId || typeof userContent !== "string") {
-    return NextResponse.json(
-      { message: "Invalid request body." },
-      { status: 400 }
-    );
+    throw new ValidationError("Invalid request parameters", {
+      threadId: !threadId ? ["threadId is required"] : [],
+      content:
+        typeof userContent !== "string" ? ["content must be a string"] : [],
+    });
   }
 
   // 1. 定义编码器，用于将字符串转换为 Uint8Array
@@ -36,6 +42,13 @@ export async function GET(request: NextRequest) {
   // 用于中断流的控制器
   const abortController = new AbortController();
   let isAborted = false;
+
+  // 超时控制
+  const timeoutId = setTimeout(() => {
+    console.warn(`Stream timeout after ${STREAM_TIMEOUT}ms`);
+    isAborted = true;
+    abortController.abort();
+  }, STREAM_TIMEOUT);
 
   // 2. 创建一个可读流
   const stream = new ReadableStream<Uint8Array>({
@@ -46,7 +59,7 @@ export async function GET(request: NextRequest) {
         if (isAborted) return;
         try {
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
+            encoder.encode(`data: ${JSON.stringify(data)}\n\n`),
           );
         } catch {
           // 流已关闭，忽略
@@ -99,27 +112,23 @@ export async function GET(request: NextRequest) {
           if (!isAborted) {
             controller.enqueue(encoder.encode("event: error\n"));
             controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({
-                  message:
-                    error instanceof Error ? error.message : "Unknown error",
-                  threadId,
-                })}\n\n`
-              )
+              encoder.encode(`data: ${formatStreamError(error, threadId)}\n\n`),
             );
           }
         } finally {
+          // 清理超时控制器
+          clearTimeout(timeoutId);
           try {
             controller.close();
           } catch {
-            // 流已关闭，忽略
+            // Stream already closed
           }
         }
       })();
     },
 
-    // 当客户端断开连接时调用
     cancel() {
+      clearTimeout(timeoutId);
       isAborted = true;
       abortController.abort();
     },
@@ -150,11 +159,11 @@ export async function POST(request: NextRequest) {
     mcpUrl,
   } = body;
 
+  // 参数验证
   if (!threadId) {
-    return NextResponse.json(
-      { message: "threadId is required" },
-      { status: 400 }
-    );
+    throw new ValidationError("threadId is required", {
+      threadId: ["threadId is required"],
+    });
   }
 
   // 如果是恢复请求（有 value 参数），使用原有逻辑
@@ -164,10 +173,9 @@ export async function POST(request: NextRequest) {
 
   // 新消息请求处理逻辑
   if (typeof content !== "string") {
-    return NextResponse.json(
-      { message: "Invalid request body." },
-      { status: 400 }
-    );
+    throw new ValidationError("Invalid request body", {
+      content: ["content must be a string"],
+    });
   }
 
   console.log("Stream POST request received:", {
@@ -184,13 +192,20 @@ export async function POST(request: NextRequest) {
   const abortController = new AbortController();
   let isAborted = false;
 
+  // 超时控制
+  const timeoutId = setTimeout(() => {
+    console.warn(`Stream timeout after ${STREAM_TIMEOUT}ms`);
+    isAborted = true;
+    abortController.abort();
+  }, STREAM_TIMEOUT);
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (data: MessageResponse) => {
         if (isAborted) return;
         try {
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
+            encoder.encode(`data: ${JSON.stringify(data)}\n\n`),
           );
         } catch {
           // 流已关闭，忽略
@@ -234,15 +249,11 @@ export async function POST(request: NextRequest) {
         if (!isAborted) {
           controller.enqueue(encoder.encode("event: error\n"));
           controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                message:
-                  error instanceof Error ? error.message : "Unknown error",
-              })}\n\n`
-            )
+            encoder.encode(`data: ${formatStreamError(error, threadId)}\n\n`),
           );
         }
       } finally {
+        clearTimeout(timeoutId);
         try {
           controller.close();
         } catch {
@@ -252,6 +263,7 @@ export async function POST(request: NextRequest) {
     },
 
     cancel() {
+      clearTimeout(timeoutId);
       isAborted = true;
       abortController.abort();
     },
@@ -280,7 +292,7 @@ async function handleInterruptResume(threadId: string, value: any) {
         if (isAborted) return;
         try {
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
+            encoder.encode(`data: ${JSON.stringify(data)}\n\n`),
           );
         } catch {
           // 流已关闭
@@ -364,8 +376,8 @@ async function handleInterruptResume(threadId: string, value: any) {
               `data: ${JSON.stringify({
                 message:
                   error instanceof Error ? error.message : "Unknown error",
-              })}\n\n`
-            )
+              })}\n\n`,
+            ),
           );
         }
       } finally {
