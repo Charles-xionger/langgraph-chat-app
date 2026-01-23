@@ -226,7 +226,7 @@ export async function createAgent(config?: AgentConfigOptions) {
   }
 
   // 内置工具
-  let internalTools = getInternalTools(llm, createEmbeddingsModel());
+  let internalTools = await getInternalTools(llm, createEmbeddingsModel());
 
   // 工具过滤：如果提供了 enabledTools，则只加载选中的工具
   if (config?.enabledTools && config.enabledTools.length > 0) {
@@ -352,30 +352,13 @@ export function getMCPToolsMetadata(mcpUrl: string): ToolMetadata[] | null {
  * 获取内置工具元数据
  */
 export function getInternalToolsMetadata(): ToolMetadata[] {
-  return [
-    {
-      id: "internal:get_weather",
-      name: "get_weather",
-      description: "Get current weather information for a specific location",
-      category: "internal",
-    },
-    {
-      id: "internal:calculator",
-      name: "calculator",
-      description: "Calculate the result of a mathematical expression",
-      category: "internal",
-    },
-    {
-      id: "internal:search_web",
-      name: "search_web",
-      description: "Search the web and return URLs with brief snippets",
-      category: "internal",
-    },
-    {
-      id: "internal:web_browser",
-      name: "web_browser",
-      description: "Browse web pages and extract full content",
-      category: "internal",
-    },
-  ];
+  // 从新的工具系统获取元数据
+  const { getToolLoader } = require("./tools");
+  const loader = getToolLoader();
+  return loader.getAvailableTools().map((meta) => ({
+    id: meta.id,
+    name: meta.name,
+    description: meta.description,
+    category: "internal",
+  }));
 }

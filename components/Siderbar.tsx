@@ -234,7 +234,7 @@ const SidebarComponent: React.FC<SidebarProps> = ({
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] flex items-center justify-center text-white font-bold text-sm">
+                          <div className="w-full h-full bg-linear-to-br from-[#FFD700] to-[#FFA500] flex items-center justify-center text-white font-bold text-sm">
                             {session.user.name?.[0]?.toUpperCase() ||
                               session.user.email?.[0]?.toUpperCase() ||
                               "U"}
