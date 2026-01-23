@@ -7,12 +7,15 @@ import {
   SearchIcon,
   FolderIcon,
   Settings,
+  LogOut,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import SettingsPopover from "./SettingsPopover";
 import { useRouter } from "next/navigation";
 import { useCreateThread } from "@/app/api/agent/server-store";
 import { Thread } from "@/types/message";
+import { useSession, signOut } from "next-auth/react";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 function StardewStar() {
   return (
@@ -46,6 +49,7 @@ const SidebarComponent: React.FC<SidebarProps> = ({
   setShowSearchModal,
 }) => {
   const router = useRouter();
+  const { data: session } = useSession();
 
   // 创建线程
   const createThreadMutation = useCreateThread((newThread: Thread) => {
@@ -218,23 +222,57 @@ const SidebarComponent: React.FC<SidebarProps> = ({
                 </SettingsPopover>
               </div>
               {/* User profile */}
-              <div className="mt-2 flex items-center gap-2 inventory-slot rounded p-2">
-                <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-[#FFD700] shadow-sm">
-                  <img
-                    src="/Jack 'O' Lantern.png"
-                    alt="Farmer"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-bold text-[#451806] dark:text-[#F2E6C2]">
-                    Farmer
-                  </div>
-                  <div className="truncate text-xs text-[#6B4423] dark:text-[#8B7355]">
-                    Pelican Town
-                  </div>
-                </div>
-              </div>
+              {session?.user && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="mt-2 w-full flex items-center gap-2 inventory-slot rounded p-2 hover:bg-[#C78F56]/20 transition-colors">
+                      <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-[#FFD700] shadow-sm">
+                        {session.user.image ? (
+                          <img
+                            src={session.user.image}
+                            alt={session.user.name || "User"}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-[#FFD700] to-[#FFA500] flex items-center justify-center text-white font-bold text-sm">
+                            {session.user.name?.[0]?.toUpperCase() ||
+                              session.user.email?.[0]?.toUpperCase() ||
+                              "U"}
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1 text-left">
+                        <div className="truncate text-sm font-bold text-[#451806] dark:text-[#F2E6C2]">
+                          {session.user.name || "User"}
+                        </div>
+                        <div className="truncate text-xs text-[#6B4423] dark:text-[#8B7355]">
+                          {session.user.email}
+                        </div>
+                      </div>
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    side="top"
+                    className="w-64 stardew-box p-0 overflow-hidden"
+                  >
+                    <div className="p-3 border-b-2 border-[#552814] dark:border-[#8B6F47]">
+                      <div className="text-sm font-bold text-[#451806] dark:text-[#F2E6C2]">
+                        {session.user.name}
+                      </div>
+                      <div className="text-xs text-[#6B4423] dark:text-[#8B7355] truncate">
+                        {session.user.email}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => signOut({ callbackUrl: "/login" })}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[#451806] dark:text-[#F2E6C2] hover:bg-[#C78F56]/20 transition-colors"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span>登出</span>
+                    </button>
+                  </PopoverContent>
+                </Popover>
+              )}
             </div>
           </aside>
         )}

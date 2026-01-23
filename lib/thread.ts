@@ -4,9 +4,20 @@ import prisma from "@/lib/database/pirsma";
  * Ensure a thread exists; create if missing. Title derived from seed (first 100 chars) or fallback.
  * Returns the Prisma thread record.
  */
-export async function ensureThread(threadId: string, titleSeed?: string) {
+export async function ensureThread(
+  threadId: string,
+  userId: string,
+  titleSeed?: string,
+) {
   if (!threadId) throw new Error("threadId is required");
-  const existing = await prisma.thread.findUnique({ where: { id: threadId } });
+  if (!userId) throw new Error("userId is required");
+
+  const existing = await prisma.thread.findFirst({
+    where: {
+      id: threadId,
+      userId: userId,
+    },
+  });
 
   // 如果线程已存在
   if (existing) {
@@ -41,5 +52,11 @@ export async function ensureThread(threadId: string, titleSeed?: string) {
     title = `对话 ${timeStr}`;
   }
 
-  return prisma.thread.create({ data: { id: threadId, title } });
+  return prisma.thread.create({
+    data: {
+      id: threadId,
+      title,
+      userId: userId,
+    },
+  });
 }

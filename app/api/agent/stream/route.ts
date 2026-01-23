@@ -6,22 +6,21 @@ import { MessageResponse } from "@/types/message";
 import { NextRequest, NextResponse } from "next/server";
 import { ValidationError, formatStreamError } from "@/lib/errors";
 import { warmupMCPTools } from "@/lib/agent";
+import { auth } from "@/lib/auth";
 
-// 流式超时时间 (90秒) - 给复杂的工具调用链和 MCP 工具更多时间
+// 流式超时时间 (120秒) - 给复杂的工具调用链和 MCP 工具更多时间
 const STREAM_TIMEOUT = 120000; // 120000ms = 120s
 
-// ==================== MCP 工具预热 ====================
-// 在模块加载时预热常用的 MCP 服务器，避免第一个请求等待
-// 注意：这是后台异步操作，不会阻塞模块加载
-const DEFAULT_MCP_URL =
-  process.env.DEFAULT_MCP_URL || "https://drawing-mcp.xiongerer.xyz/mcp";
-if (DEFAULT_MCP_URL) {
-  console.log(`🔥 预热 MCP 工具缓存: ${DEFAULT_MCP_URL}`);
-  warmupMCPTools(DEFAULT_MCP_URL);
-}
-// ======================================================
-
 export async function GET(request: NextRequest) {
+  // 验证用户认证
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 },
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const threadId = searchParams.get("threadId");
   const userContent = searchParams.get("content");
@@ -50,7 +49,7 @@ export async function GET(request: NextRequest) {
   });
 
   // 如果请求中包含 MCP URL，异步预热（不阻塞当前请求）
-  if (mcpUrl && mcpUrl !== DEFAULT_MCP_URL) {
+  if (mcpUrl) {
     warmupMCPTools(mcpUrl);
   }
 
@@ -111,6 +110,7 @@ export async function GET(request: NextRequest) {
         try {
           const iterable = await streamResponse({
             threadId,
+            userId: session.user.id!,
             userText: userContent,
             opts: {
               provider: provider || undefined,
@@ -185,6 +185,15 @@ export async function GET(request: NextRequest) {
 
 // POST 接口 - 支持文件上传的消息请求和恢复被 interrupt 暂停的执行
 export async function POST(request: NextRequest) {
+  // 验证用户认证
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 },
+    );
+  }
+
   const body = await request.json();
   const {
     threadId,
@@ -271,6 +280,7 @@ export async function POST(request: NextRequest) {
       try {
         const iterable = await streamResponse({
           threadId,
+          userId: session.user.id!,
           userText: content,
           opts: {
             provider,

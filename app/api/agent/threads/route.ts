@@ -2,6 +2,7 @@ import prisma from "@/lib/database/pirsma";
 import { Thread } from "@/types/message";
 import { NextRequest, NextResponse } from "next/server";
 import { ValidationError, withErrorHandler } from "@/lib/errors";
+import { auth } from "@/lib/auth";
 
 type ThreadEntity = {
   id: string;
@@ -15,7 +16,16 @@ type ThreadEntity = {
  * @returns 线程列表的 JSON 响应
  */
 export const GET = withErrorHandler(async () => {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 },
+    );
+  }
+
   const dbThreads = await prisma.thread.findMany({
+    where: { userId: session.user.id },
     orderBy: { updatedAt: "desc" },
     take: 50, // 限制返回的线程数量
   });
@@ -35,6 +45,14 @@ export const GET = withErrorHandler(async () => {
  * @returns 新创建的线程的 JSON 响应
  */
 export const POST = withErrorHandler(async () => {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 },
+    );
+  }
+
   // 生成友好的时间标题
   const now = new Date();
   const timeStr = now.toLocaleTimeString("zh-CN", {
@@ -47,6 +65,7 @@ export const POST = withErrorHandler(async () => {
   const createdThread = await prisma.thread.create({
     data: {
       title,
+      userId: session.user.id,
     },
   });
 
@@ -61,6 +80,14 @@ export const POST = withErrorHandler(async () => {
 });
 
 export const PATCH = withErrorHandler(async (request: NextRequest) => {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 },
+    );
+  }
+
   const body = await request.json();
 
   const { threadId, title } = body || {};
@@ -73,7 +100,10 @@ export const PATCH = withErrorHandler(async (request: NextRequest) => {
   }
 
   const updatedThread = await prisma.thread.update({
-    where: { id: threadId },
+    where: {
+      id: threadId,
+      userId: session.user.id,
+    },
     data: { title },
   });
 
@@ -92,6 +122,14 @@ export const PATCH = withErrorHandler(async (request: NextRequest) => {
 });
 
 export const DELETE = withErrorHandler(async (request: NextRequest) => {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 },
+    );
+  }
+
   const body = await request.json();
 
   const { threadId } = body || {};
@@ -104,7 +142,10 @@ export const DELETE = withErrorHandler(async (request: NextRequest) => {
 
   // Prisma 会自动抛出 P2025 错误，会被 handlePrismaError 捕获并转换为 NotFoundError
   await prisma.thread.delete({
-    where: { id: threadId },
+    where: {
+      id: threadId,
+      userId: session.user.id,
+    },
   });
 
   return NextResponse.json(

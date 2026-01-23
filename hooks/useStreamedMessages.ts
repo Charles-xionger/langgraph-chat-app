@@ -343,7 +343,7 @@ export function useStreamedMessages(
         opts: messageOptions,
       });
     },
-    [threadId, queryClient, handleStreamResponse],
+    [threadId, queryClient, handleStreamResponse, currentConfig],
   );
 
   useEffect(() => {

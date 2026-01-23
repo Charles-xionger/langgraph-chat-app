@@ -274,14 +274,15 @@ function getFileTypeLabel(fileType: string): string {
  */
 export async function streamResponse(params: {
   threadId: string;
+  userId: string;
   userText: string;
   opts?: MessageOptions;
 }) {
-  const { threadId, userText, opts } = params;
+  const { threadId, userId, userText, opts } = params;
 
   // 确保线程在数据库中存在，并初始化必要的元数据/状态。
   // 这样可以让 agent 将流式响应与持久化的线程关联起来。
-  await ensureThread(threadId, userText);
+  await ensureThread(threadId, userId, userText);
 
   // 检查并清理未完成的工具调用
   if (!opts?.allowTool) {

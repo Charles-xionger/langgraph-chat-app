@@ -5,6 +5,30 @@ import { useState, useEffect } from "react";
 import { ThreadProvider } from "@/contexts/ThreadContext";
 import { CodeThemeProvider } from "@/contexts/CodeThemeContext";
 import { useToolStore } from "@/stores/toolStore";
+import { SessionProvider, useSession } from "next-auth/react";
+
+function ToolPreloader() {
+  const { status } = useSession();
+  const loadToolMetadata = useToolStore((state) => state.loadToolMetadata);
+  const [hasLoaded, setHasLoaded] = useState(false);
+
+  useEffect(() => {
+    // 只在用户登录后且未加载过时，预加载工具元数据
+    if (status === "authenticated" && !hasLoaded) {
+      console.log("🚀 用户已登录，预加载工具元数据...");
+      loadToolMetadata()
+        .then(() => {
+          setHasLoaded(true);
+          console.log("✅ 工具元数据预加载完成");
+        })
+        .catch((error) => {
+          console.error("⚠️  预加载工具失败:", error);
+        });
+    }
+  }, [status, hasLoaded, loadToolMetadata]);
+
+  return null;
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -18,21 +42,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
       }),
   );
 
-  const loadToolMetadata = useToolStore((state) => state.loadToolMetadata);
-
-  // 预加载工具元数据
-  useEffect(() => {
-    console.log("🚀 Preloading tools metadata...");
-    loadToolMetadata().catch((error) => {
-      console.error("⚠️  Failed to preload tools:", error);
-    });
-  }, [loadToolMetadata]);
-
   return (
-    <QueryClientProvider client={queryClient}>
-      <CodeThemeProvider>
-        <ThreadProvider>{children}</ThreadProvider>
-      </CodeThemeProvider>
-    </QueryClientProvider>
+    <SessionProvider>
+      <QueryClientProvider client={queryClient}>
+        <CodeThemeProvider>
+          <ThreadProvider>
+            <ToolPreloader />
+            {children}
+          </ThreadProvider>
+        </CodeThemeProvider>
+      </QueryClientProvider>
+    </SessionProvider>
   );
 }
