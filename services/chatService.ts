@@ -95,6 +95,8 @@ export async function createMessageStream(
         allowTool: opts.allowTool,
         files: opts.files,
         mcpUrl: opts.mcpUrl,
+        autoToolCall: opts.autoToolCall,
+        enabledTools: opts.enabledTools,
       }),
     });
 
@@ -200,6 +202,35 @@ export async function createMessageStream(
   if (opts?.mcpUrl) {
     queryParams.append("mcpUrl", opts.mcpUrl);
   }
+  // 添加 autoToolCall 参数
+  if (opts?.autoToolCall !== undefined) {
+    queryParams.append("autoToolCall", String(opts.autoToolCall));
+  }
+  // 添加 enabledTools 参数
+  if (opts?.enabledTools && opts.enabledTools.length > 0) {
+    queryParams.append("enabledTools", JSON.stringify(opts.enabledTools));
+  }
 
   return new EventSource(`${API_BASE_URL}/stream?${queryParams.toString()}`);
+}
+
+// 删除消息
+export async function deleteMessages(
+  threadId: string,
+  messageIds: string[],
+): Promise<{ success: boolean; deletedCount: number }> {
+  const response = await fetch(`${API_BASE_URL}/messages`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ threadId, messageIds }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to delete messages");
+  }
+
+  const result = await response.json();
+  return result.data;
 }

@@ -1,13 +1,25 @@
-export const maxDuration = 60;
+export const maxDuration = 120;
 export const dynamic = "force-dynamic";
 
 import { streamResponse } from "@/services/agentService";
 import { MessageResponse } from "@/types/message";
 import { NextRequest, NextResponse } from "next/server";
 import { ValidationError, formatStreamError } from "@/lib/errors";
+import { warmupMCPTools } from "@/lib/agent";
 
-// 流式超时时间 (50秒)
-const STREAM_TIMEOUT = 50000;
+// 流式超时时间 (90秒) - 给复杂的工具调用链和 MCP 工具更多时间
+const STREAM_TIMEOUT = 120000; // 120000ms = 120s
+
+// ==================== MCP 工具预热 ====================
+// 在模块加载时预热常用的 MCP 服务器，避免第一个请求等待
+// 注意：这是后台异步操作，不会阻塞模块加载
+const DEFAULT_MCP_URL =
+  process.env.DEFAULT_MCP_URL || "https://drawing-mcp.xiongerer.xyz/mcp";
+if (DEFAULT_MCP_URL) {
+  console.log(`🔥 预热 MCP 工具缓存: ${DEFAULT_MCP_URL}`);
+  warmupMCPTools(DEFAULT_MCP_URL);
+}
+// ======================================================
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -17,6 +29,11 @@ export async function GET(request: NextRequest) {
   const model = searchParams.get("model");
   const allowTool = searchParams.get("allowTool") as "allow" | "deny" | null;
   const mcpUrl = searchParams.get("mcpUrl");
+  const autoToolCall = searchParams.get("autoToolCall") === "true";
+  const enabledToolsParam = searchParams.get("enabledTools");
+  const enabledTools = enabledToolsParam
+    ? JSON.parse(enabledToolsParam)
+    : undefined;
 
   console.log("Stream GET request received:", {
     threadId,
@@ -25,7 +42,17 @@ export async function GET(request: NextRequest) {
     model,
     allowTool,
     mcpUrl,
+    autoToolCall,
+    enabledTools: enabledTools
+      ? `${enabledTools.length} tools`
+      : "all tools (no filter)",
+    timeout: `${STREAM_TIMEOUT}ms (${STREAM_TIMEOUT / 1000}s)`,
   });
+
+  // 如果请求中包含 MCP URL，异步预热（不阻塞当前请求）
+  if (mcpUrl && mcpUrl !== DEFAULT_MCP_URL) {
+    warmupMCPTools(mcpUrl);
+  }
 
   // 参数验证
   if (!threadId || typeof userContent !== "string") {
@@ -45,7 +72,16 @@ export async function GET(request: NextRequest) {
 
   // 超时控制
   const timeoutId = setTimeout(() => {
-    console.warn(`Stream timeout after ${STREAM_TIMEOUT}ms`);
+    console.error(
+      `⏱️ ❌ Stream timeout after ${STREAM_TIMEOUT}ms (${STREAM_TIMEOUT / 1000}s)`,
+    );
+    console.error("GET Request timeout - Details:", {
+      threadId,
+      provider,
+      model,
+      autoToolCall,
+      mcpUrl,
+    });
     isAborted = true;
     abortController.abort();
   }, STREAM_TIMEOUT);
@@ -81,6 +117,8 @@ export async function GET(request: NextRequest) {
               model: model || undefined,
               allowTool: allowTool || undefined,
               mcpUrl: mcpUrl || undefined,
+              autoToolCall,
+              enabledTools: enabledTools,
             },
           });
 
@@ -157,6 +195,8 @@ export async function POST(request: NextRequest) {
     files,
     value,
     mcpUrl,
+    autoToolCall,
+    enabledTools,
   } = body;
 
   // 参数验证
@@ -186,6 +226,11 @@ export async function POST(request: NextRequest) {
     allowTool,
     files: files?.length || 0,
     mcpUrl,
+    autoToolCall,
+    enabledTools: enabledTools
+      ? `${enabledTools.length} tools`
+      : "all tools (no filter)",
+    timeout: `${STREAM_TIMEOUT}ms (${STREAM_TIMEOUT / 1000}s)`,
   });
 
   const encoder = new TextEncoder();
@@ -194,7 +239,16 @@ export async function POST(request: NextRequest) {
 
   // 超时控制
   const timeoutId = setTimeout(() => {
-    console.warn(`Stream timeout after ${STREAM_TIMEOUT}ms`);
+    console.error(
+      `⏱️ ❌ Stream timeout after ${STREAM_TIMEOUT}ms (${STREAM_TIMEOUT / 1000}s)`,
+    );
+    console.error("POST Request timeout - Details:", {
+      threadId,
+      provider,
+      model,
+      autoToolCall,
+      hasFiles: !!files,
+    });
     isAborted = true;
     abortController.abort();
   }, STREAM_TIMEOUT);
@@ -218,7 +272,15 @@ export async function POST(request: NextRequest) {
         const iterable = await streamResponse({
           threadId,
           userText: content,
-          opts: { provider, model, allowTool, files, mcpUrl },
+          opts: {
+            provider,
+            model,
+            allowTool,
+            files,
+            mcpUrl,
+            autoToolCall,
+            enabledTools,
+          },
         });
 
         for await (const chunk of iterable) {

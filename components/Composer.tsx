@@ -10,10 +10,12 @@ import {
 import { flushSync } from "react-dom";
 import { Send, Loader2, Plus, Mic, ChevronDown, MicOff } from "lucide-react";
 import ComposerActionsPopover from "./ComposerActionsPopover";
+import ToolSelector from "./ToolSelector";
 import { cls } from "@/lib/utils";
 import { CHATBOT_MODELS } from "@/lib/constants";
 import { useQwenASR } from "@/hooks/useQwenASR";
 import { useFileUpload } from "@/hooks/useFileUpload";
+import { useModelStore } from "@/stores/modelStore";
 import { AttachmentFile } from "@/types/message";
 
 interface ComposerProps {
@@ -23,7 +25,7 @@ interface ComposerProps {
   onModelChange?: (
     model: string,
     provider: string | null,
-    modelId?: string
+    modelId?: string,
   ) => void;
 }
 
@@ -34,7 +36,7 @@ export interface ComposerRef {
 
 const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
   { onSend, busy, selectedModel, onModelChange },
-  ref
+  ref,
 ) {
   const [value, setValue] = useState("");
   const [sending, setSending] = useState(false);
@@ -115,10 +117,10 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
         const fileType = file.type.startsWith("image/")
           ? "image"
           : file.type.startsWith("audio/")
-          ? "audio"
-          : file.type.startsWith("video/")
-          ? "video"
-          : "pdf";
+            ? "audio"
+            : file.type.startsWith("video/")
+              ? "video"
+              : "pdf";
 
         newFiles.push({
           url,
@@ -179,7 +181,7 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
       const scrollHeight = textarea.scrollHeight;
       const calculatedLines = Math.max(
         1,
-        Math.floor((scrollHeight - 16) / lineHeight)
+        Math.floor((scrollHeight - 16) / lineHeight),
       );
 
       setLineCount(calculatedLines);
@@ -214,7 +216,7 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
         inputRef.current?.focus();
       },
     }),
-    []
+    [],
   );
 
   async function handleSend() {
@@ -230,7 +232,7 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
     try {
       await onSend?.(
         value,
-        attachedFiles.length > 0 ? attachedFiles : undefined
+        attachedFiles.length > 0 ? attachedFiles : undefined,
       );
       setValue("");
       setAttachedFiles([]);
@@ -299,7 +301,7 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
             className={cls(
               "w-full resize-none bg-transparent text-sm outline-none placeholder:text-[#A05030]/60 dark:placeholder:text-[#8B7355]/60 transition-all duration-200 stardew-input",
               "px-0 py-2 min-h-10 text-left text-[#451806] dark:text-[#F2E6C2]",
-              "font-sans"
+              "font-sans",
             )}
             style={{
               height: "auto",
@@ -366,7 +368,7 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
                       className={cls(
                         "w-full flex items-center gap-2 px-3 py-2 text-xs text-left rounded hover:bg-[#C78F56]/20",
                         bot.name === selectedModel && "bg-[#C78F56]/30",
-                        !bot.provider && "opacity-50 cursor-not-allowed"
+                        !bot.provider && "opacity-50 cursor-not-allowed",
                       )}
                       disabled={!bot.provider}
                       title={!bot.provider ? "暂未配置" : ""}
@@ -381,6 +383,12 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
                 </div>
               )}
             </div>
+
+            {/* Tool selector */}
+            <ToolSelector
+              selectedTools={useModelStore.getState().enabledTools}
+              onToolsChange={useModelStore.getState().setEnabledTools}
+            />
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
@@ -392,14 +400,14 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
                 isRecording
                   ? "text-red-500 bg-red-500/20 hover:bg-red-500/30 animate-pulse"
                   : "text-[#A05030] dark:text-[#C78F56] hover:bg-[#C78F56]/20 hover:text-[#552814] dark:hover:text-[#F2E6C2]",
-                isProcessing && "opacity-50 cursor-not-allowed"
+                isProcessing && "opacity-50 cursor-not-allowed",
               )}
               title={
                 isRecording
                   ? "停止录音"
                   : isProcessing
-                  ? "处理中..."
-                  : "语音输入"
+                    ? "处理中..."
+                    : "语音输入"
               }
             >
               {isRecording ? (
@@ -424,7 +432,7 @@ const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer(
                   busy ||
                   uploading ||
                   (!value.trim() && attachedFiles.length === 0)) &&
-                  "opacity-50 cursor-not-allowed"
+                  "opacity-50 cursor-not-allowed",
               )}
             >
               {sending || busy ? (

@@ -20,9 +20,10 @@ export interface MessageOptions {
   model?: string;
   tools?: string[];
   allowTool?: "allow" | "deny";
-  approveAllTools?: boolean; // if true, skip tool approval prompts
+  autoToolCall?: boolean; // if true, skip tool approval prompts and auto-execute tools
   files?: AttachmentFile[]; // 多模态文件支持
   mcpUrl?: string; // MCP server URL for external tools
+  enabledTools?: string[]; // List of enabled tool IDs (e.g., ["internal:get_weather", "mcp:oss_file_list"])
 }
 
 export interface BasicMessageData {

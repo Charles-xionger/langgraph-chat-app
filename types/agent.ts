@@ -3,6 +3,7 @@ export interface AgentConfigOptions {
   provider?: string; // 'google' | 'openai' etc.
   systemPrompt?: string; // system prompt override
   tools?: unknown[]; // tools from registry or direct tool objects
-  approveAllTools?: boolean; // if true, skip tool approval prompts
+  autoToolCall?: boolean; // if true, skip tool approval prompts and auto-execute tools
   mcpUrl?: string; // MCP server URL for external tools
+  enabledTools?: string[]; // List of enabled tool IDs (e.g., ["internal:get_weather", "mcp:oss_file_list"])
 }

@@ -315,8 +315,16 @@ export async function streamResponse(params: {
   const provider = opts?.provider;
   const model = opts?.model;
   const mcpUrl = opts?.mcpUrl;
+  const autoToolCall = opts?.autoToolCall;
+  const enabledTools = opts?.enabledTools;
 
-  console.log("🔧 Creating agent with config:", { provider, model, mcpUrl });
+  console.log("🔧 Creating agent with config:", {
+    provider,
+    model,
+    mcpUrl,
+    autoToolCall,
+    enabledTools: enabledTools ? `${enabledTools.length} tools` : undefined,
+  });
 
   // 创建或获取一个按所选 provider/model/tools 配置的 agent 实例。
   // `ensureAgent` 会构建一个 AgentBuilder，并将工具绑定到 LLM 上。
@@ -324,8 +332,9 @@ export async function streamResponse(params: {
     provider: provider,
     model: model,
     tools: opts?.tools,
-    approveAllTools: opts?.approveAllTools,
+    autoToolCall: autoToolCall,
     mcpUrl: mcpUrl,
+    enabledTools: enabledTools,
   });
 
   // Type assertion needed for Command union with state update in v1
@@ -573,9 +582,32 @@ export async function streamResponse(params: {
           // 关键：只有当消息包含 tool_calls 时才处理
           // 这避免了 updates 模式重复发送普通文本消息
           if (hasToolCall) {
+            console.log("🔧 Processing tool call message:", {
+              hasContent: !!message.content,
+              contentType: Array.isArray(message.content)
+                ? "array"
+                : typeof message.content,
+              hasToolCalls: "tool_calls" in message,
+            });
+
             const processedMessage = processAIMessage(
               message as Record<string, unknown>,
             );
+
+            console.log("🔧 Processed message result:", {
+              hasResult: !!processedMessage,
+              type: processedMessage?.type,
+              contentType:
+                processedMessage && "content" in processedMessage.data
+                  ? Array.isArray(processedMessage.data.content)
+                    ? "array"
+                    : typeof processedMessage.data.content
+                  : null,
+              hasToolCalls:
+                processedMessage?.type === "ai" &&
+                "tool_calls" in processedMessage.data,
+            });
+
             // 再次确认返回的消息确实包含 tool_calls
             if (
               processedMessage &&
@@ -583,6 +615,7 @@ export async function streamResponse(params: {
               "tool_calls" in processedMessage.data &&
               processedMessage.data.tool_calls
             ) {
+              console.log("✅ Yielding tool call message");
               yield processedMessage;
             }
           }
@@ -656,14 +689,23 @@ function processAIMessage(
     // 工具调用：返回更丰富的 AIMessageData 结构，以便前端渲染工具调用详情并在需要时展示审批 UI。
     // 返回字段说明：
     // - id：回复/消息的稳定 id
-    // - content：若存在则为文本内容（可能为空）
+    // - content：可能是字符串或包含 functionCall 的数组
     // - tool_calls：工具调用描述数组（包含 name、id、args 等）
     // - additional_kwargs / response_metadata：模型可能携带的额外元数据
+
+    // 保留原始 content，无论是字符串还是数组（包含 functionCall）
+    let content: string | any[] = "";
+    if (typeof message.content === "string") {
+      content = message.content;
+    } else if (Array.isArray(message.content)) {
+      content = message.content;
+    }
+
     return {
       type: "ai",
       data: {
         id: (message.id as string) || Date.now().toString(),
-        content: typeof message.content === "string" ? message.content : "",
+        content: content,
         tool_calls: (message.tool_calls as ToolCall[]) || undefined,
         additional_kwargs:
           (message.additional_kwargs as Record<string, unknown>) || undefined,
@@ -711,7 +753,6 @@ export async function fetchThreadHistory(
   if (!thread) return [];
   try {
     const history = await getHistory(threadId);
-    console.log("🚀 ~ fetchThreadHistory ~ history:", history);
     return history.map((msg: BaseMessage) => msg.toDict() as MessageResponse);
   } catch (e) {
     console.error("fetchThreadHistory error", e);

@@ -6,18 +6,40 @@ import {
   ToolMessageData,
   InterruptData,
 } from "@/types/message";
-import { Square } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
+import { Square, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollArea } from "./ui/scroll-area";
 import { MessageContent } from "./MessageContent";
 import { ToolCallDisplay, ToolResultDisplay } from "./ToolDisplay";
 import { InterruptDisplay } from "./InterruptDisplay";
+import { useDeleteMessages } from "@/hooks/useDeleteMessages";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 
 // 判断消息是否有实际内容需要展示
 function hasDisplayableContent(
   message: MessageResponse,
-  toolResultIds: Set<string>
+  toolResultIds: Set<string>,
 ): boolean {
+  // interrupt 类型始终展示
+  if (message.type === "interrupt") {
+    return true;
+  }
+
+  // tool 类型始终展示
+  if (message.type === "tool") {
+    return true;
+  }
+
+  // 对于 AI/human/error 消息，检查是否有内容
   const data = message.data as AIMessageData;
 
   // 检查是否有文本内容
@@ -31,12 +53,7 @@ function hasDisplayableContent(
   const hasPendingToolCalls =
     hasToolCalls && data.tool_calls!.some((tc) => !toolResultIds.has(tc.id));
 
-  return (
-    hasContent ||
-    hasPendingToolCalls ||
-    message.type === "tool" ||
-    message.type === "interrupt"
-  );
+  return !!(hasContent || hasPendingToolCalls);
 }
 
 interface MessageListProps {
@@ -53,6 +70,10 @@ export const MessageList = ({
   onInterruptRespond,
 }: MessageListProps) => {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
+  const { mutate: deleteMessageMutation, isPending: isDeleting } =
+    useDeleteMessages();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -71,6 +92,26 @@ export const MessageList = ({
     });
     return ids;
   }, [messages]);
+
+  // 处理删除消息
+  const handleDeleteClick = (messageId: string) => {
+    setMessageToDelete(messageId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (messageToDelete) {
+      deleteMessageMutation(
+        { messageIds: [messageToDelete] },
+        {
+          onSuccess: () => {
+            setDeleteDialogOpen(false);
+            setMessageToDelete(null);
+          },
+        },
+      );
+    }
+  };
 
   return (
     <ScrollArea className="h-full w-full">
@@ -111,71 +152,91 @@ export const MessageList = ({
               return (
                 <div
                   key={message.data.id || index}
-                  className={`flex gap-3 ${
-                    message.type === "human" ? "justify-end" : "justify-start"
-                  }`}
+                  className="group/message space-y-2"
                 >
-                  {message.type !== "human" && (
-                    <div className="mt-0.5 shrink-0">
-                      <div className="relative">
-                        <img
-                          src="/junimo.png"
-                          alt="Junimo"
-                          className="w-8 h-8 object-contain"
-                        />
-                        <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-[#5DCC52] rounded-full border border-[#FFFAE6] dark:border-[#1a1f2e]"></div>
-                      </div>
-                    </div>
-                  )}
                   <div
-                    className={`max-w-[80%] ${
-                      message.type === "human"
-                        ? "stardew-box rounded-2xl px-4 py-3 border-2 border-[#FFD700] shadow-sm"
-                        : message.type === "error"
-                        ? "stardew-box rounded-lg px-4 py-3 border-2 border-red-600 dark:border-red-500"
-                        : message.type === "tool" ||
-                          message.type === "interrupt" ||
-                          (hasPendingToolCalls && !hasContent)
-                        ? "" // 工具卡片和中断卡片自带样式，不需要额外背景
-                        : "stardew-box rounded-2xl px-4 py-3"
+                    className={`flex gap-3 ${
+                      message.type === "human" ? "justify-end" : "justify-start"
                     }`}
                   >
-                    {message.type === "interrupt" ? (
-                      <InterruptDisplay
-                        data={message.data as InterruptData}
-                        onRespond={onInterruptRespond}
-                      />
-                    ) : message.type === "tool" ? (
-                      <ToolResultDisplay
-                        data={message.data as ToolMessageData}
-                      />
-                    ) : hasPendingToolCalls && !hasContent ? (
-                      // 仅有待处理的工具调用，无文本内容
-                      <div className="space-y-2">
-                        {pendingToolCalls.map((toolCall, idx) => (
-                          <ToolCallDisplay
-                            key={toolCall.id || idx}
-                            toolCall={toolCall}
+                    {message.type !== "human" && (
+                      <div className="mt-0.5 shrink-0">
+                        <div className="relative">
+                          <img
+                            src="/junimo.png"
+                            alt="Junimo"
+                            className="w-8 h-8 object-contain"
                           />
-                        ))}
+                          <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-[#5DCC52] rounded-full border border-[#FFFAE6] dark:border-[#1a1f2e]"></div>
+                        </div>
                       </div>
-                    ) : (
-                      <div className="text-sm text-[--stardew-text] dark:text-[--stardew-parchment]">
-                        <MessageContent message={message} />
+                    )}
+                    <div className="flex flex-col gap-2 max-w-[80%]">
+                      <div
+                        className={`${
+                          message.type === "human"
+                            ? "stardew-box rounded-2xl px-4 py-3 border-2 border-[#FFD700] shadow-sm"
+                            : message.type === "error"
+                              ? "stardew-box rounded-lg px-4 py-3 border-2 border-red-600 dark:border-red-500"
+                              : message.type === "tool" ||
+                                  message.type === "interrupt" ||
+                                  (hasPendingToolCalls && !hasContent)
+                                ? "" // 工具卡片和中断卡片自带样式，不需要额外背景
+                                : "stardew-box rounded-2xl px-4 py-3"
+                        }`}
+                      >
+                        {message.type === "interrupt" ? (
+                          <InterruptDisplay
+                            data={message.data as InterruptData}
+                            onRespond={onInterruptRespond}
+                          />
+                        ) : message.type === "tool" ? (
+                          <ToolResultDisplay
+                            data={message.data as ToolMessageData}
+                          />
+                        ) : hasPendingToolCalls && !hasContent ? (
+                          // 仅有待处理的工具调用，无文本内容
+                          <div className="space-y-2">
+                            {pendingToolCalls.map((toolCall, idx) => (
+                              <ToolCallDisplay
+                                key={toolCall.id || idx}
+                                toolCall={toolCall}
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-[--stardew-text] dark:text-[--stardew-parchment]">
+                            <MessageContent message={message} />
+                          </div>
+                        )}
+                      </div>
+                      {/* Delete button below message */}
+                      <div
+                        className={`flex ${message.type === "human" ? "justify-end" : "justify-start"}`}
+                      >
+                        <button
+                          onClick={() => handleDeleteClick(message.data.id)}
+                          disabled={isDeleting}
+                          className="flex items-center gap-1 px-2 py-1 text-xs text-[#8B7355] dark:text-[#C78F56] hover:text-red-600 dark:hover:text-red-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed opacity-0 group-hover/message:opacity-100"
+                          title="Delete message"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          <span className="pixel-text-xs">Delete</span>
+                        </button>
+                      </div>
+                    </div>
+                    {message.type === "human" && (
+                      <div className="mt-0.5 shrink-0">
+                        <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-[#FFD700] shadow-sm inventory-slot">
+                          <img
+                            src="/Jack 'O' Lantern.png"
+                            alt="User"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
                       </div>
                     )}
                   </div>
-                  {message.type === "human" && (
-                    <div className="mt-0.5 shrink-0">
-                      <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-[#FFD700] shadow-sm inventory-slot">
-                        <img
-                          src="/Jack 'O' Lantern.png"
-                          alt="User"
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    </div>
-                  )}
                 </div>
               );
             })
@@ -217,6 +278,36 @@ export const MessageList = ({
         )}
         <div ref={bottomRef} />
       </div>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="stardew-box border-2 border-[#8B7355]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="pixel-text text-[#654321] dark:text-[#C78F56]">
+              Delete Message
+            </AlertDialogTitle>
+            <AlertDialogDescription className="pixel-text-sm text-[#8B7355] dark:text-[#C78F56]">
+              Are you sure you want to delete this message? This action cannot
+              be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={isDeleting}
+              className="stardew-button pixel-text-sm"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={isDeleting}
+              className="stardew-button pixel-text-sm bg-red-600 hover:bg-red-700 text-white"
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </ScrollArea>
   );
 };

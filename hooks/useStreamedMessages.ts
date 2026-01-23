@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useStreamedMessages(
   threadId?: string,
-  currentConfig?: { provider?: string; model?: string }
+  currentConfig?: { provider?: string; model?: string; autoToolCall?: boolean },
 ) {
   const queryClient = useQueryClient();
 
@@ -20,6 +20,11 @@ export function useStreamedMessages(
   const [isSending, setIsSending] = useState(false);
   const [isReceiving, setIsReceiving] = useState(false);
   const [sendError, setSendError] = useState<Error | null>(null);
+
+  // 监听配置变化
+  useEffect(() => {
+    console.log("📡 useStreamedMessages: config changed:", currentConfig);
+  }, [currentConfig]);
 
   const cleanupStream = useCallback(() => {
     try {
@@ -67,7 +72,7 @@ export function useStreamedMessages(
             console.log(
               "📨 Received message:",
               messageResponse.type,
-              messageResponse
+              messageResponse,
             );
 
             const data: any = messageResponse.data;
@@ -79,7 +84,7 @@ export function useStreamedMessages(
             if (messageResponse.type === "interrupt") {
               queryClient.setQueryData(
                 ["messages", tid],
-                (old: MessageResponse[] = []) => [...old, messageResponse]
+                (old: MessageResponse[] = []) => [...old, messageResponse],
               );
               return;
             }
@@ -88,7 +93,7 @@ export function useStreamedMessages(
             if (messageResponse.type === "tool") {
               queryClient.setQueryData(
                 ["messages", tid],
-                (old: MessageResponse[] = []) => [...old, messageResponse]
+                (old: MessageResponse[] = []) => [...old, messageResponse],
               );
               return;
             }
@@ -96,32 +101,61 @@ export function useStreamedMessages(
             // AI 消息带有 tool_calls 且无文本内容，表示工具调用请求
             // 这种情况下，我们需要更新现有消息或新增
             const hasToolCalls = data.tool_calls && data.tool_calls.length > 0;
-            const hasContent = data.content && data.content.trim();
+            const hasContentArray =
+              Array.isArray(data.content) && data.content.length > 0;
+            const hasContentString =
+              typeof data.content === "string" && data.content.trim();
+
+            console.log("📨 Processing AI message:", {
+              id: data.id,
+              hasToolCalls,
+              hasContentArray,
+              hasContentString,
+              contentType: Array.isArray(data.content)
+                ? "array"
+                : typeof data.content,
+              isNewMessage:
+                !currentMessageRef.current ||
+                currentMessageRef.current.data.id !== data.id,
+            });
 
             if (
               !currentMessageRef.current ||
               currentMessageRef.current.data.id !== data.id
             ) {
               // 新消息
+              console.log("➕ Adding new AI message to state");
               currentMessageRef.current = messageResponse;
               queryClient.setQueryData(
                 ["messages", tid],
                 (old: MessageResponse[] = []) => [
                   ...old,
                   currentMessageRef.current!,
-                ]
+                ],
               );
             } else {
               // 累积现有消息
+              console.log("🔄 Updating existing AI message");
               const currentData: any = currentMessageRef.current.data;
 
               // 文本内容累积
               let newContent = currentData.content || "";
-              if (typeof data.content === "string" && data.content) {
-                newContent =
-                  typeof currentData.content === "string"
-                    ? currentData.content + data.content
-                    : data.content;
+              if (data.content) {
+                // 如果新内容是字符串，累积到现有内容
+                if (typeof data.content === "string") {
+                  newContent =
+                    typeof currentData.content === "string"
+                      ? currentData.content + data.content
+                      : data.content;
+                }
+                // 如果新内容是数组（如 functionCall），直接替换
+                else if (Array.isArray(data.content)) {
+                  console.log(
+                    "🔧 Received array content (functionCall):",
+                    data.content,
+                  );
+                  newContent = data.content;
+                }
               }
 
               // 工具调用：直接替换（后端会发送完整的 tool_calls）
@@ -144,17 +178,25 @@ export function useStreamedMessages(
                 },
               };
 
+              console.log("💾 Updated message:", {
+                id: currentMessageRef.current.data.id,
+                contentType: Array.isArray(newContent)
+                  ? "array"
+                  : typeof newContent,
+                hasToolCalls: !!newToolCalls,
+              });
+
               queryClient.setQueryData(
                 ["messages", tid],
                 (old: MessageResponse[] = []) => {
                   const idx = old.findIndex(
-                    (m) => m.data?.id === currentMessageRef.current!.data.id
+                    (m) => m.data?.id === currentMessageRef.current!.data.id,
                   );
                   if (idx === -1) return old;
                   const clone = [...old];
                   clone[idx] = currentMessageRef.current!;
                   return clone;
-                }
+                },
               );
             }
           } catch {
@@ -198,7 +240,7 @@ export function useStreamedMessages(
 
             queryClient.setQueryData(
               ["messages", tid],
-              (old: MessageResponse[] = []) => [...old, errorMsg]
+              (old: MessageResponse[] = []) => [...old, errorMsg],
             );
           } finally {
             setIsSending(false);
@@ -223,7 +265,7 @@ export function useStreamedMessages(
         }
       }
     },
-    [queryClient]
+    [queryClient],
   );
 
   const sendMessage = useCallback(
@@ -280,15 +322,20 @@ export function useStreamedMessages(
       };
       queryClient.setQueryData(
         ["messages", threadId],
-        (old: MessageResponse[] = []) => [...old, userMessage]
+        (old: MessageResponse[] = []) => [...old, userMessage],
       );
 
-      // 合并文件选项
+      // 合并文件选项和 autoToolCall 配置
       const messageOptions: MessageOptions = {
         ...opts,
         ...(files && files.length > 0 && { files }),
         ...(mcpUrl && { mcpUrl }),
+        ...(currentConfig?.autoToolCall !== undefined && {
+          autoToolCall: currentConfig.autoToolCall,
+        }),
       };
+
+      console.log("📤 Sending message with options:", messageOptions);
 
       await handleStreamResponse({
         threadId,
@@ -296,7 +343,7 @@ export function useStreamedMessages(
         opts: messageOptions,
       });
     },
-    [threadId, queryClient, handleStreamResponse]
+    [threadId, queryClient, handleStreamResponse],
   );
 
   useEffect(() => {
@@ -339,7 +386,7 @@ export function useStreamedMessages(
       queryClient.setQueryData(
         ["messages", threadId],
         (old: MessageResponse[] = []) =>
-          old.filter((msg) => msg.type !== "interrupt")
+          old.filter((msg) => msg.type !== "interrupt"),
       );
 
       // 重置 currentMessageRef，确保新的 AI 响应能正确处理
@@ -357,7 +404,7 @@ export function useStreamedMessages(
         },
       });
     },
-    [threadId, handleStreamResponse, queryClient]
+    [threadId, handleStreamResponse, queryClient],
   );
 
   return {
