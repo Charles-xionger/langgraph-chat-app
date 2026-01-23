@@ -15,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { ReactNode } from "react";
 import { MCPConfigDialog } from "./mcp/MCPConfigDialog";
 import { useModelStore } from "@/stores/modelStore";
+import { signOut } from "next-auth/react";
 
 export default function SettingsPopover({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -143,7 +144,10 @@ export default function SettingsPopover({ children }: { children: ReactNode }) {
 
             <div className="border-t-2 border-[--stardew-wood-dark] dark:border-[#8B6F47] my-2"></div>
 
-            <button className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-red-500/10 rounded transition-colors text-red-600 dark:text-red-400">
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-red-500/10 rounded transition-colors text-red-600 dark:text-red-400"
+            >
               <LogOut className="h-4 w-4" />
               <span>🚪 Log out</span>
             </button>
