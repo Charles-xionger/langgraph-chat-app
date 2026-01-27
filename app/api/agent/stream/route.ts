@@ -21,6 +21,9 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // 提取 userId 以确保类型安全
+  const userId = session.user.id;
+
   const { searchParams } = new URL(request.url);
   const threadId = searchParams.get("threadId");
   const userContent = searchParams.get("content");
@@ -110,7 +113,7 @@ export async function GET(request: NextRequest) {
         try {
           const iterable = await streamResponse({
             threadId,
-            userId: session.user.id!,
+            userId,
             userText: userContent,
             opts: {
               provider: provider || undefined,
@@ -193,6 +196,9 @@ export async function POST(request: NextRequest) {
       { status: 401 },
     );
   }
+
+  // 提取 userId 以确保类型安全
+  const userId = session.user.id;
 
   const body = await request.json();
   const {
@@ -280,7 +286,7 @@ export async function POST(request: NextRequest) {
       try {
         const iterable = await streamResponse({
           threadId,
-          userId: session.user.id!,
+          userId,
           userText: content,
           opts: {
             provider,
