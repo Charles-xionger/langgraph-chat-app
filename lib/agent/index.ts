@@ -355,10 +355,10 @@ export function getInternalToolsMetadata(): ToolMetadata[] {
   // 从新的工具系统获取元数据
   const { getToolLoader } = require("./tools");
   const loader = getToolLoader();
-  return loader.getAvailableTools().map((meta) => ({
+  return loader.getAvailableTools().map((meta: any) => ({
     id: meta.id,
     name: meta.name,
     description: meta.description,
-    category: "internal",
+    category: "internal" as const,
   }));
 }

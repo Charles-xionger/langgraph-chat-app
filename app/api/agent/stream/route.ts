@@ -387,10 +387,14 @@ async function handleInterruptResume(threadId: string, value: any) {
         const agent = await ensureAgent({});
 
         // 使用 Command 恢复执行
-        const iterable = await agent.stream(new Command({ resume: value }), {
-          streamMode: "messages",
-          configurable: { thread_id: threadId },
-        });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const iterable = await agent.stream(
+          new Command({ resume: value }) as any,
+          {
+            streamMode: "messages",
+            configurable: { thread_id: threadId },
+          },
+        );
 
         for await (const chunk of iterable) {
           if (isAborted || abortController.signal.aborted) {
