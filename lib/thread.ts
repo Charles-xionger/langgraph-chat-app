@@ -12,6 +12,18 @@ export async function ensureThread(
   if (!threadId) throw new Error("threadId is required");
   if (!userId) throw new Error("userId is required");
 
+  // 首先验证用户是否存在
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true },
+  });
+
+  if (!user) {
+    throw new Error(
+      `User with id ${userId} not found. Please ensure user is logged in.`,
+    );
+  }
+
   const existing = await prisma.thread.findFirst({
     where: {
       id: threadId,

@@ -1,4 +1,3 @@
-import { WebBrowser } from "@langchain/classic/tools/webbrowser";
 import { BaseToolBuilder } from "./base";
 import { ToolCategory, ToolConfig, ToolMetadata } from "./types";
 
@@ -31,13 +30,16 @@ export class BrowserToolBuilder extends BaseToolBuilder {
     return true;
   }
 
-  build(config?: ToolConfig) {
+  async build(config?: ToolConfig) {
     this.requireConfig(config, "model");
     this.requireConfig(config, "embeddings");
 
     if (!config?.model || !config?.embeddings) {
       throw new Error("Model and embeddings are required for web browser tool");
     }
+
+    // 动态导入以避免在模块加载时出错
+    const { WebBrowser } = await import("@langchain/classic/tools/webbrowser");
 
     return new WebBrowser({
       model: config.model,

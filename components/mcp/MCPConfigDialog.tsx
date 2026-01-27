@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { AlertDialog, AlertDialogContent } from "@/components/ui/alert-dialog";
 import { MCPConfigPanel, MCPConfig } from "@/components/mcp";
 import { X } from "lucide-react";
+import { useModelStore } from "@/stores/modelStore";
 
 interface MCPConfigDialogProps {
   open: boolean;
@@ -12,8 +13,13 @@ interface MCPConfigDialogProps {
 
 export function MCPConfigDialog({ open, onOpenChange }: MCPConfigDialogProps) {
   const [mcpConfigs, setMcpConfigs] = useState<MCPConfig[]>([]);
-  const [selectedMcpId, setSelectedMcpId] = useState<string | null>(null);
   const [isMcpLoading, setIsMcpLoading] = useState(false);
+  const {
+    mcpConfigs: selectedConfigs,
+    addMcpConfig,
+    removeMcpConfig,
+    updateMcpConfig,
+  } = useModelStore();
 
   // 获取 MCP 配置列表
   const fetchMcpConfigs = async () => {
@@ -31,24 +37,83 @@ export function MCPConfigDialog({ open, onOpenChange }: MCPConfigDialogProps) {
     }
   };
 
+  // 配置保存成功后的回调
+  const handleConfigSaved = async (id: string) => {
+    // 如果这个配置已经被选中，需要更新 modelStore 中的数据
+    const isSelected = selectedConfigs.some((config) => config.id === id);
+    if (isSelected) {
+      try {
+        const response = await fetch(`/api/mcp/configs/${id}`);
+        if (response.ok) {
+          const data = await response.json();
+          const config = data.config;
+          console.log("🔄 Updating selected MCP config:", {
+            id,
+            url: config?.url,
+            headers: config?.headers,
+          });
+          updateMcpConfig(id, {
+            url: config?.url || "",
+            headers: config?.headers || undefined,
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching updated MCP config:", error);
+      }
+    }
+  };
+
+  // 配置删除成功后的回调
+  const handleConfigDeleted = (id: string) => {
+    console.log("🗑️ Removing deleted MCP config from store:", id);
+    removeMcpConfig(id);
+  };
+
   useEffect(() => {
     if (open) {
       fetchMcpConfigs();
-      // 从 localStorage 加载上次选择的配置
-      const saved = localStorage.getItem("selectedMcpId");
-      if (saved) {
-        setSelectedMcpId(saved);
-      }
     }
   }, [open]);
 
-  const handleSelect = (id: string | null) => {
-    setSelectedMcpId(id);
-    // 保存到 localStorage
-    if (id) {
-      localStorage.setItem("selectedMcpId", id);
+  const handleSelect = async (id: string | null) => {
+    if (!id) {
+      // 选择"不使用 MCP"，清空所有配置
+      selectedConfigs.forEach((config) => {
+        removeMcpConfig(config.id);
+      });
+      return;
+    }
+
+    // 检查是否已经选中
+    const isSelected = selectedConfigs.some((config) => config.id === id);
+
+    if (isSelected) {
+      // 如果已选中，则移除
+      console.log("🔌 Removing MCP config:", id);
+      removeMcpConfig(id);
     } else {
-      localStorage.removeItem("selectedMcpId");
+      // 如果未选中，则添加
+      try {
+        const response = await fetch(`/api/mcp/configs/${id}`);
+        if (response.ok) {
+          const data = await response.json();
+          const config = data.config;
+          console.log("🔌 Adding MCP config:", {
+            id,
+            url: config?.url,
+            headers: config?.headers,
+          });
+          addMcpConfig({
+            id,
+            url: config?.url || "",
+            headers: config?.headers || undefined,
+          });
+        } else {
+          console.error("Failed to fetch MCP config");
+        }
+      } catch (error) {
+        console.error("Error fetching MCP config:", error);
+      }
     }
   };
 
@@ -74,10 +139,12 @@ export function MCPConfigDialog({ open, onOpenChange }: MCPConfigDialogProps) {
             </p>
             <MCPConfigPanel
               configs={mcpConfigs}
-              selectedId={selectedMcpId}
+              selectedIds={selectedConfigs.map((c) => c.id)}
               isLoading={isMcpLoading}
               onSelect={handleSelect}
               onRefresh={fetchMcpConfigs}
+              onConfigSaved={handleConfigSaved}
+              onConfigDeleted={handleConfigDeleted}
             />
           </div>
         </div>

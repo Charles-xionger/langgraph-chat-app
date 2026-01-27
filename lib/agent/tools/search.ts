@@ -1,6 +1,5 @@
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
-import { SerpAPI } from "@langchain/community/tools/serpapi";
 import { BaseToolBuilder } from "./base";
 import { ToolCategory, ToolConfig, ToolMetadata } from "./types";
 
@@ -33,8 +32,11 @@ export class SearchWebToolBuilder extends BaseToolBuilder {
     return true;
   }
 
-  build(config?: ToolConfig) {
+  async build(config?: ToolConfig) {
     const apiKey = config?.apiKey || process.env.SERPAPI_API_KEY;
+
+    // 动态导入以避免在模块加载时出错
+    const { SerpAPI } = await import("@langchain/community/tools/serpapi");
 
     return tool(
       async ({ query }) => {

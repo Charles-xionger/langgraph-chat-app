@@ -8,13 +8,18 @@ export interface ToolMetadata {
   schema?: any;
 }
 
+interface MCPConfigInfo {
+  url: string;
+  headers?: Record<string, string>;
+}
+
 interface ToolState {
   internalTools: ToolMetadata[];
   mcpTools: ToolMetadata[];
   loading: boolean;
   error: string | null;
-  mcpUrl: string | null;
-  loadToolMetadata: (mcpUrl?: string) => Promise<void>;
+  mcpConfigs: MCPConfigInfo[];
+  loadToolMetadata: (mcpConfigs?: MCPConfigInfo[] | string) => Promise<void>;
   refreshTools: () => Promise<void>;
 }
 
@@ -23,15 +28,20 @@ export const useToolStore = create<ToolState>((set, get) => ({
   mcpTools: [],
   loading: false,
   error: null,
-  mcpUrl: null,
+  mcpConfigs: [],
 
-  loadToolMetadata: async (mcpUrl?: string) => {
+  loadToolMetadata: async (mcpConfigs?: MCPConfigInfo[] | string) => {
     set({ loading: true, error: null });
 
     try {
-      const url = mcpUrl
-        ? `/api/tools/metadata?mcpUrl=${encodeURIComponent(mcpUrl)}`
-        : "/api/tools/metadata";
+      let url = "/api/tools/metadata";
+
+      // 兼容旧的 mcpUrl 字符串参数
+      if (typeof mcpConfigs === "string") {
+        url = `/api/tools/metadata?mcpUrl=${encodeURIComponent(mcpConfigs)}`;
+      } else if (mcpConfigs && mcpConfigs.length > 0) {
+        url = `/api/tools/metadata?mcpConfigs=${encodeURIComponent(JSON.stringify(mcpConfigs))}`;
+      }
 
       console.log(`🔧 Loading tools metadata from: ${url}`);
 
@@ -46,13 +56,13 @@ export const useToolStore = create<ToolState>((set, get) => ({
       console.log(`✅ Tools metadata loaded:`, {
         internal: data.internal.length,
         mcp: data.mcp.length,
-        mcpUrl: data.mcpUrl,
+        mcpConfigs: data.mcpConfigs?.length || 0,
       });
 
       set({
         internalTools: data.internal || [],
         mcpTools: data.mcp || [],
-        mcpUrl: data.mcpUrl,
+        mcpConfigs: data.mcpConfigs || [],
         loading: false,
         error: null,
       });
@@ -86,7 +96,9 @@ export const useToolStore = create<ToolState>((set, get) => ({
   },
 
   refreshTools: async () => {
-    const { mcpUrl } = get();
-    await get().loadToolMetadata(mcpUrl || undefined);
+    const { mcpConfigs } = get();
+    await get().loadToolMetadata(
+      mcpConfigs.length > 0 ? mcpConfigs : undefined,
+    );
   },
 }));

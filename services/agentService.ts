@@ -315,14 +315,14 @@ export async function streamResponse(params: {
   // 配置参数直接使用，不需要从数据库恢复（前端会在每次请求时传递）
   const provider = opts?.provider;
   const model = opts?.model;
-  const mcpUrl = opts?.mcpUrl;
+  const mcpConfigs = opts?.mcpConfigs;
   const autoToolCall = opts?.autoToolCall;
   const enabledTools = opts?.enabledTools;
 
   console.log("🔧 Creating agent with config:", {
     provider,
     model,
-    mcpUrl,
+    mcpConfigs: mcpConfigs ? `${mcpConfigs.length} configs` : undefined,
     autoToolCall,
     enabledTools: enabledTools ? `${enabledTools.length} tools` : undefined,
   });
@@ -334,7 +334,7 @@ export async function streamResponse(params: {
     model: model,
     tools: opts?.tools,
     autoToolCall: autoToolCall,
-    mcpUrl: mcpUrl,
+    mcpConfigs: mcpConfigs,
     enabledTools: enabledTools,
   });
 
@@ -345,7 +345,7 @@ export async function streamResponse(params: {
     // 保存完整配置到 checkpoint，以便恢复时使用
     ...(provider && { provider }),
     ...(model && { model }),
-    ...(mcpUrl && { mcpUrl }),
+    ...(mcpConfigs && mcpConfigs.length > 0 && { mcpConfigs }),
   };
   let iterable: any;
 

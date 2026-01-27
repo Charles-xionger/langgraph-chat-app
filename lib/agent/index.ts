@@ -3,7 +3,7 @@ import { postgresCheckpointer } from "./memory";
 import { AgentBuilder } from "./builder";
 import { ChatOpenAI, OpenAIEmbeddings } from "@langchain/openai";
 import { SYSTEM_PROMPT } from "./prompt";
-import { getInternalTools } from "./tools";
+import { getInternalTools, getToolLoader } from "./tools";
 import { DynamicTool } from "langchain";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatAlibabaTongyi } from "@langchain/community/chat_models/alibaba_tongyi";
@@ -32,6 +32,17 @@ const mcpClientCache = new Map<string, MultiServerMCPClient>();
 const mcpToolsCache = new Map<string, DynamicTool[]>();
 const mcpLoadingPromises = new Map<string, Promise<DynamicTool[]>>();
 
+interface MCPServerConfig {
+  url: string;
+  headers?: Record<string, string>;
+}
+
+// 生成缓存key，包含URL和headers
+function getMCPCacheKey(config: MCPServerConfig): string {
+  const headersStr = config.headers ? JSON.stringify(config.headers) : "";
+  return `${config.url}|${headersStr}`;
+}
+
 // 工具元数据缓存 - 供前端 API 使用
 export interface ToolMetadata {
   id: string;
@@ -45,53 +56,59 @@ const mcpToolsMetadataCache = new Map<string, ToolMetadata[]>();
 /**
  * 获取或创建 MCP Client（全局单例）
  */
-function getOrCreateMCPClient(mcpUrl: string): MultiServerMCPClient {
-  if (!mcpClientCache.has(mcpUrl)) {
-    console.log(`🔌 创建新的 MCP Client 单例: ${mcpUrl}`);
+function getOrCreateMCPClient(config: MCPServerConfig): MultiServerMCPClient {
+  const cacheKey = getMCPCacheKey(config);
+  if (!mcpClientCache.has(cacheKey)) {
+    console.log(`🔌 创建新的 MCP Client 单例: ${config.url}`);
     const client = new MultiServerMCPClient({
       mcpServer: {
         transport: "http",
-        url: mcpUrl,
+        url: config.url,
+        ...(config.headers && { headers: config.headers }),
       },
     });
-    mcpClientCache.set(mcpUrl, client);
+    mcpClientCache.set(cacheKey, client);
   }
-  return mcpClientCache.get(mcpUrl)!;
+  return mcpClientCache.get(cacheKey)!;
 }
 
 /**
  * 加载 MCP 工具（带防抖，避免并发请求重复加载）
  */
-async function loadMCPTools(mcpUrl: string): Promise<DynamicTool[]> {
+async function loadMCPTools(config: MCPServerConfig): Promise<DynamicTool[]> {
+  const cacheKey = getMCPCacheKey(config);
+
   // 如果已有缓存，直接返回
-  if (mcpToolsCache.has(mcpUrl)) {
-    const cached = mcpToolsCache.get(mcpUrl)!;
-    console.log(`✅ 使用 MCP 工具缓存: ${cached.length} 个工具 (${mcpUrl})`);
+  if (mcpToolsCache.has(cacheKey)) {
+    const cached = mcpToolsCache.get(cacheKey)!;
+    console.log(
+      `✅ 使用 MCP 工具缓存: ${cached.length} 个工具 (${config.url})`,
+    );
     return cached;
   }
 
   // 如果正在加载中，等待现有的加载完成（防抖）
-  if (mcpLoadingPromises.has(mcpUrl)) {
-    console.log(`⏳ 等待 MCP 工具加载完成: ${mcpUrl}`);
-    return await mcpLoadingPromises.get(mcpUrl)!;
+  if (mcpLoadingPromises.has(cacheKey)) {
+    console.log(`⏳ 等待 MCP 工具加载完成: ${config.url}`);
+    return await mcpLoadingPromises.get(cacheKey)!;
   }
 
   // 开始新的加载
-  console.log(`🔄 从服务器加载 MCP 工具: ${mcpUrl}`);
+  console.log(`🔄 从服务器加载 MCP 工具: ${config.url}`);
   const startTime = Date.now();
 
   const loadPromise = (async () => {
     try {
-      const client = getOrCreateMCPClient(mcpUrl);
+      const client = getOrCreateMCPClient(config);
       const tools = (await client.getTools()) as any as DynamicTool[];
 
       const loadTime = Date.now() - startTime;
       console.log(
-        `✅ MCP 工具加载完成: ${tools.length} 个工具 (耗时: ${loadTime}ms, URL: ${mcpUrl})`,
+        `✅ MCP 工具加载完成: ${tools.length} 个工具 (耗时: ${loadTime}ms, URL: ${config.url})`,
       );
 
       // 缓存工具
-      mcpToolsCache.set(mcpUrl, tools);
+      mcpToolsCache.set(cacheKey, tools);
 
       // 缓存工具元数据
       const metadata: ToolMetadata[] = tools.map((tool) => ({
@@ -101,7 +118,7 @@ async function loadMCPTools(mcpUrl: string): Promise<DynamicTool[]> {
         category: "mcp" as const,
         schema: tool.schema,
       }));
-      mcpToolsMetadataCache.set(mcpUrl, metadata);
+      mcpToolsMetadataCache.set(cacheKey, metadata);
 
       // 打印工具详情（仅首次加载且开发模式）
       if (process.env.NODE_ENV === "development") {
@@ -117,12 +134,12 @@ async function loadMCPTools(mcpUrl: string): Promise<DynamicTool[]> {
       return tools;
     } finally {
       // 加载完成后移除 loading promise
-      mcpLoadingPromises.delete(mcpUrl);
+      mcpLoadingPromises.delete(cacheKey);
     }
   })();
 
   // 记录正在加载的 promise
-  mcpLoadingPromises.set(mcpUrl, loadPromise);
+  mcpLoadingPromises.set(cacheKey, loadPromise);
 
   return await loadPromise;
 }
@@ -205,19 +222,24 @@ export async function createAgent(config?: AgentConfigOptions) {
 
   const llm = createChatModel({ provider, model });
 
-  // MCP Tools - 从配置中获取 MCP URL
+  // MCP Tools - 从配置中获取 MCP 配置数组
   let mcptools: DynamicTool[] = [];
   let mcpLoadError: MCPError | null = null;
 
-  if (config?.mcpUrl) {
+  if (config?.mcpConfigs && config.mcpConfigs.length > 0) {
     try {
-      // 使用优化后的加载函数（自动处理缓存和防抖）
-      mcptools = await loadMCPTools(config.mcpUrl);
+      // 为每个 MCP 配置加载工具
+      const allMcpToolsPromises = config.mcpConfigs.map((mcpConfig) =>
+        loadMCPTools(mcpConfig),
+      );
+      const allMcpToolsArrays = await Promise.all(allMcpToolsPromises);
+      // 合并所有 MCP 工具
+      mcptools = allMcpToolsArrays.flat();
     } catch (error) {
       // 存储错误但不中断 Agent 创建，实现降级策略
       mcpLoadError = new MCPError(
         "Failed to load MCP tools - continuing with built-in tools only",
-        config.mcpUrl,
+        config.mcpConfigs[0]?.url,
         undefined,
       );
       console.error("❌ 加载 MCP 工具失败:", error);
@@ -330,22 +352,25 @@ export async function getAgent(config?: AgentConfigOptions) {
 /**
  * 预热 MCP 工具缓存（后台异步加载）
  * 在应用启动时调用，避免第一个用户请求时等待 MCP 工具加载
- * @param mcpUrl MCP 服务器 URL
+ * @param config MCP 服务器配置
  */
-export function warmupMCPTools(mcpUrl: string): void {
+export function warmupMCPTools(config: MCPServerConfig): void {
   // 异步预加载，不阻塞主流程
-  loadMCPTools(mcpUrl).catch((error) => {
-    console.warn(`⚠️  MCP 工具预热失败 (${mcpUrl}):`, error);
+  loadMCPTools(config).catch((error) => {
+    console.warn(`⚠️  MCP 工具预热失败 (${config.url}):`, error);
   });
 }
 
 /**
  * 获取 MCP 工具元数据（供 API 使用）
- * @param mcpUrl MCP 服务器 URL
+ * @param config MCP 服务器配置
  * @returns 工具元数据数组，如果未加载则返回 null
  */
-export function getMCPToolsMetadata(mcpUrl: string): ToolMetadata[] | null {
-  return mcpToolsMetadataCache.get(mcpUrl) || null;
+export function getMCPToolsMetadata(
+  config: MCPServerConfig,
+): ToolMetadata[] | null {
+  const cacheKey = getMCPCacheKey(config);
+  return mcpToolsMetadataCache.get(cacheKey) || null;
 }
 
 /**
@@ -353,7 +378,6 @@ export function getMCPToolsMetadata(mcpUrl: string): ToolMetadata[] | null {
  */
 export function getInternalToolsMetadata(): ToolMetadata[] {
   // 从新的工具系统获取元数据
-  const { getToolLoader } = require("./tools");
   const loader = getToolLoader();
   return loader.getAvailableTools().map((meta: any) => ({
     id: meta.id,

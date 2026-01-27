@@ -35,13 +35,19 @@ export default function ChatPane({
     selectedProvider,
     selectedModelId,
     autoToolCall,
+    enabledTools,
+    mcpConfigs,
     setModel,
   } = useModelStore();
 
-  // 监听 autoToolCall 变化
+  // 监听配置变化
   useEffect(() => {
-    console.log("💡 ChatPane: autoToolCall changed to:", autoToolCall);
-  }, [autoToolCall]);
+    console.log("💡 ChatPane: config changed:", {
+      autoToolCall,
+      enabledTools,
+      mcpConfigs,
+    });
+  }, [autoToolCall, enabledTools, mcpConfigs]);
 
   const { data: threads } = useGetThreads();
   const { data: messages, isLoading: isLoadingHistory } =
@@ -52,6 +58,8 @@ export default function ChatPane({
       provider: selectedProvider || undefined,
       model: selectedModelId,
       autoToolCall,
+      enabledTools,
+      mcpConfigs: mcpConfigs || undefined,
     });
 
   // 处理 interrupt 响应

@@ -94,7 +94,7 @@ export async function createMessageStream(
         model: opts.model,
         allowTool: opts.allowTool,
         files: opts.files,
-        mcpUrl: opts.mcpUrl,
+        mcpConfigs: opts.mcpConfigs,
         autoToolCall: opts.autoToolCall,
         enabledTools: opts.enabledTools,
       }),
@@ -198,9 +198,9 @@ export async function createMessageStream(
   if (opts?.allowTool) {
     queryParams.append("allowTool", opts.allowTool);
   }
-  // 添加 mcpUrl 参数
-  if (opts?.mcpUrl) {
-    queryParams.append("mcpUrl", opts.mcpUrl);
+  // 添加 mcpConfigs 参数
+  if (opts?.mcpConfigs && opts.mcpConfigs.length > 0) {
+    queryParams.append("mcpConfigs", JSON.stringify(opts.mcpConfigs));
   }
   // 添加 autoToolCall 参数
   if (opts?.autoToolCall !== undefined) {

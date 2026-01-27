@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ValidationError, formatStreamError } from "@/lib/errors";
 import { warmupMCPTools } from "@/lib/agent";
 import { auth } from "@/lib/auth";
+import prisma from "@/lib/database/pirsma";
 
 // 流式超时时间 (120秒) - 给复杂的工具调用链和 MCP 工具更多时间
 const STREAM_TIMEOUT = 120000; // 120000ms = 120s
@@ -24,13 +25,39 @@ export async function GET(request: NextRequest) {
   // 提取 userId 以确保类型安全
   const userId = session.user.id;
 
+  // 验证用户是否在数据库中存在
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      console.error(`User ${userId} not found in database`);
+      return NextResponse.json(
+        {
+          success: false,
+          error: "User not found. Please try logging in again.",
+        },
+        { status: 404 },
+      );
+    }
+  } catch (dbError) {
+    console.error("Database error checking user:", dbError);
+    return NextResponse.json(
+      { success: false, error: "Database error" },
+      { status: 500 },
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const threadId = searchParams.get("threadId");
   const userContent = searchParams.get("content");
   const provider = searchParams.get("provider");
   const model = searchParams.get("model");
   const allowTool = searchParams.get("allowTool") as "allow" | "deny" | null;
-  const mcpUrl = searchParams.get("mcpUrl");
+  const mcpConfigsParam = searchParams.get("mcpConfigs");
+  const mcpConfigs = mcpConfigsParam ? JSON.parse(mcpConfigsParam) : undefined;
   const autoToolCall = searchParams.get("autoToolCall") === "true";
   const enabledToolsParam = searchParams.get("enabledTools");
   const enabledTools = enabledToolsParam
@@ -43,7 +70,7 @@ export async function GET(request: NextRequest) {
     provider,
     model,
     allowTool,
-    mcpUrl,
+    mcpConfigs: mcpConfigs ? `${mcpConfigs.length} configs` : "none",
     autoToolCall,
     enabledTools: enabledTools
       ? `${enabledTools.length} tools`
@@ -51,9 +78,11 @@ export async function GET(request: NextRequest) {
     timeout: `${STREAM_TIMEOUT}ms (${STREAM_TIMEOUT / 1000}s)`,
   });
 
-  // 如果请求中包含 MCP URL，异步预热（不阻塞当前请求）
-  if (mcpUrl) {
-    warmupMCPTools(mcpUrl);
+  // 如果请求中包含 MCP 配置，异步预热（不阻塞当前请求）
+  if (mcpConfigs && mcpConfigs.length > 0) {
+    mcpConfigs.forEach((config: any) => {
+      warmupMCPTools(config);
+    });
   }
 
   // 参数验证
@@ -77,13 +106,7 @@ export async function GET(request: NextRequest) {
     console.error(
       `⏱️ ❌ Stream timeout after ${STREAM_TIMEOUT}ms (${STREAM_TIMEOUT / 1000}s)`,
     );
-    console.error("GET Request timeout - Details:", {
-      threadId,
-      provider,
-      model,
-      autoToolCall,
-      mcpUrl,
-    });
+
     isAborted = true;
     abortController.abort();
   }, STREAM_TIMEOUT);
@@ -119,7 +142,7 @@ export async function GET(request: NextRequest) {
               provider: provider || undefined,
               model: model || undefined,
               allowTool: allowTool || undefined,
-              mcpUrl: mcpUrl || undefined,
+              mcpConfigs: mcpConfigs || undefined,
               autoToolCall,
               enabledTools: enabledTools,
             },
@@ -200,6 +223,31 @@ export async function POST(request: NextRequest) {
   // 提取 userId 以确保类型安全
   const userId = session.user.id;
 
+  // 验证用户是否在数据库中存在
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      console.error(`User ${userId} not found in database`);
+      return NextResponse.json(
+        {
+          success: false,
+          error: "User not found. Please try logging in again.",
+        },
+        { status: 404 },
+      );
+    }
+  } catch (dbError) {
+    console.error("Database error checking user:", dbError);
+    return NextResponse.json(
+      { success: false, error: "Database error" },
+      { status: 500 },
+    );
+  }
+
   const body = await request.json();
   const {
     threadId,
@@ -209,7 +257,7 @@ export async function POST(request: NextRequest) {
     allowTool,
     files,
     value,
-    mcpUrl,
+    mcpConfigs,
     autoToolCall,
     enabledTools,
   } = body;
@@ -240,7 +288,7 @@ export async function POST(request: NextRequest) {
     model,
     allowTool,
     files: files?.length || 0,
-    mcpUrl,
+    mcpConfigs: mcpConfigs ? `${mcpConfigs.length} configs` : "none",
     autoToolCall,
     enabledTools: enabledTools
       ? `${enabledTools.length} tools`
@@ -262,7 +310,7 @@ export async function POST(request: NextRequest) {
       provider,
       model,
       autoToolCall,
-      hasFiles: !!files,
+      mcpConfigs,
     });
     isAborted = true;
     abortController.abort();
@@ -293,7 +341,7 @@ export async function POST(request: NextRequest) {
             model,
             allowTool,
             files,
-            mcpUrl,
+            mcpConfigs,
             autoToolCall,
             enabledTools,
           },

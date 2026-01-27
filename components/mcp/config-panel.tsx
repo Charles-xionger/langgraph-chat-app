@@ -18,6 +18,7 @@ export interface MCPConfig {
   name: string;
   url: string;
   description?: string | null;
+  headers?: Record<string, string> | null;
   enabled: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -25,28 +26,37 @@ export interface MCPConfig {
 
 interface MCPConfigPanelProps {
   configs: MCPConfig[];
-  selectedId: string | null;
+  selectedIds?: string[];
   isLoading: boolean;
   onSelect: (id: string | null) => void;
   onRefresh: () => void;
+  onConfigSaved?: (id: string) => void;
+  onConfigDeleted?: (id: string) => void;
 }
 
 export function MCPConfigPanel({
   configs,
-  selectedId,
+  selectedIds = [],
   isLoading,
   onSelect,
   onRefresh,
+  onConfigSaved,
+  onConfigDeleted,
 }: MCPConfigPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingConfig, setEditingConfig] = useState<Partial<MCPConfig> | null>(
-    null
+    null,
   );
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [errorDialog, setErrorDialog] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+  }>({ open: false, title: "", message: "" });
 
-  const selectedConfig = configs.find((c) => c.id === selectedId);
+  const selectedConfig = configs.find((c) => selectedIds.includes(c.id));
 
   const handleAdd = () => {
     setEditingConfig({
@@ -65,35 +75,91 @@ export function MCPConfigPanel({
 
   const handleSave = async () => {
     if (!editingConfig?.name || !editingConfig?.url) {
-      alert("名称和 URL 是必填项");
+      setErrorDialog({
+        open: true,
+        title: "验证失败",
+        message: "名称和 URL 是必填项",
+      });
       return;
+    }
+
+    // 验证 headers 是否为有效的 JSON
+    let parsedHeaders = undefined;
+    if (editingConfig.headers) {
+      try {
+        const headersStr =
+          typeof editingConfig.headers === "string"
+            ? editingConfig.headers
+            : JSON.stringify(editingConfig.headers);
+        if (headersStr.trim()) {
+          parsedHeaders = JSON.parse(headersStr);
+          // 确保是一个对象
+          if (
+            typeof parsedHeaders !== "object" ||
+            Array.isArray(parsedHeaders)
+          ) {
+            throw new Error("Headers 必须是一个对象");
+          }
+        }
+      } catch (error) {
+        setErrorDialog({
+          open: true,
+          title: "Headers 格式错误",
+          message:
+            error instanceof Error ? error.message : "必须是有效的 JSON 格式",
+        });
+        return;
+      }
     }
 
     setIsSaving(true);
     try {
+      const configToSave = {
+        ...editingConfig,
+        headers: parsedHeaders,
+      };
+
       if (editingConfig.id) {
         // 更新
         const response = await fetch(`/api/mcp/configs/${editingConfig.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(editingConfig),
+          body: JSON.stringify(configToSave),
         });
-        if (!response.ok) throw new Error("更新失败");
+        if (!response.ok) {
+          if (response.status === 404) {
+            throw new Error("配置不存在，可能已被删除");
+          }
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || "更新失败");
+        }
       } else {
         // 创建
         const response = await fetch("/api/mcp/configs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(editingConfig),
+          body: JSON.stringify(configToSave),
         });
-        if (!response.ok) throw new Error("创建失败");
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || "创建失败");
+        }
       }
       onRefresh();
       setIsEditing(false);
       setEditingConfig(null);
+
+      // 通知父组件配置已保存，需要更新已选中的配置
+      if (onConfigSaved && editingConfig.id) {
+        onConfigSaved(editingConfig.id);
+      }
     } catch (error) {
       console.error("保存失败:", error);
-      alert("保存失败，请重试");
+      setErrorDialog({
+        open: true,
+        title: "保存失败",
+        message: error instanceof Error ? error.message : "请重试",
+      });
     } finally {
       setIsSaving(false);
     }
@@ -104,15 +170,30 @@ export function MCPConfigPanel({
       const response = await fetch(`/api/mcp/configs/${id}`, {
         method: "DELETE",
       });
-      if (!response.ok) throw new Error("删除失败");
-      if (selectedId === id) {
-        onSelect(null);
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.warn("配置已经不存在");
+          // 即使404，也刷新列表以同步状态
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || "删除失败");
+        }
       }
+      // 删除后会通过 onConfigDeleted 自动从 modelStore 移除，不需要手动调用 onSelect
       onRefresh();
       setDeleteId(null);
+
+      // 通知父组件配置已删除，需要从 modelStore 中移除
+      if (onConfigDeleted) {
+        onConfigDeleted(id);
+      }
     } catch (error) {
       console.error("删除失败:", error);
-      alert("删除失败，请重试");
+      setErrorDialog({
+        open: true,
+        title: "删除失败",
+        message: error instanceof Error ? error.message : "请重试",
+      });
     }
   };
 
@@ -128,8 +209,8 @@ export function MCPConfigPanel({
           {isLoading
             ? "加载中..."
             : selectedConfig
-            ? selectedConfig.name
-            : "未使用 MCP"}
+              ? selectedConfig.name
+              : "未使用 MCP"}
         </span>
         <ChevronDown
           className={`h-4 w-4 text-[--stardew-wood] transition-transform ${
@@ -164,7 +245,7 @@ export function MCPConfigPanel({
                   setIsOpen(false);
                 }}
                 className={`w-full text-left p-3 rounded border-2 transition-colors ${
-                  selectedId === null
+                  selectedIds.length === 0
                     ? "border-[--stardew-green] bg-[--stardew-green]/10"
                     : "border-[--stardew-wood-light] hover:bg-[#C78F56]/10"
                 }`}
@@ -179,7 +260,7 @@ export function MCPConfigPanel({
                 <div
                   key={config.id}
                   className={`relative group p-3 rounded border-2 transition-colors ${
-                    selectedId === config.id
+                    selectedIds.includes(config.id)
                       ? "border-[--stardew-green] bg-[--stardew-green]/10"
                       : "border-[--stardew-wood-light] hover:bg-[#C78F56]/10"
                   }`}
@@ -308,6 +389,34 @@ export function MCPConfigPanel({
                   placeholder="可选的描述信息"
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-[--stardew-text] dark:text-[--stardew-parchment] mb-1">
+                  鉴权 Headers (JSON)
+                </label>
+                <textarea
+                  value={
+                    editingConfig?.headers
+                      ? typeof editingConfig.headers === "string"
+                        ? editingConfig.headers
+                        : JSON.stringify(editingConfig.headers, null, 2)
+                      : ""
+                  }
+                  onChange={(e) => {
+                    const value = e.target.value.trim();
+                    setEditingConfig({
+                      ...editingConfig,
+                      headers: value ? value : undefined,
+                    });
+                  }}
+                  className="w-full px-3 py-2 border-2 border-[--stardew-wood-light] rounded bg-white dark:bg-[--stardew-dark-bg] text-[#451806] dark:text-[--stardew-parchment] placeholder:text-[#A05030] placeholder:opacity-60 font-mono text-xs"
+                  rows={4}
+                  placeholder={'{\n  "Authorization": "Bearer your_token"\n}'}
+                />
+                <div className="text-xs text-[--stardew-wood] dark:text-[--stardew-wood-light] mt-1">
+                  可选，用于 API 鉴权的 HTTP Headers，需要填写有效的 JSON 格式
+                </div>
+              </div>
             </div>
 
             <div className="flex gap-2 mt-6">
@@ -356,6 +465,31 @@ export function MCPConfigPanel({
               className="bg-red-500! hover:bg-red-600! text-white"
             >
               删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 错误提示对话框 */}
+      <AlertDialog
+        open={errorDialog.open}
+        onOpenChange={(open) => setErrorDialog({ ...errorDialog, open })}
+      >
+        <AlertDialogContent className="bg-[--stardew-cream]! dark:bg-[--stardew-dark-bg]! stardew-box border-4 border-[--stardew-wood-dark]! dark:border-[#8B6F47]!">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[--stardew-text] dark:text-[--stardew-parchment] pixel-text-sm">
+              {errorDialog.title}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[--stardew-wood] dark:text-[--stardew-wood-light]">
+              {errorDialog.message}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={() => setErrorDialog({ ...errorDialog, open: false })}
+              className="bg-[--stardew-green]! hover:bg-[--stardew-green]/80! text-white"
+            >
+              确定
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
