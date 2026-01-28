@@ -1,0 +1,2 @@
+-- AddMCPHeaders
+ALTER TABLE "MCPConfig" ADD COLUMN IF NOT EXISTS "headers" JSONB;

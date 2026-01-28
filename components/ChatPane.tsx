@@ -30,8 +30,24 @@ export default function ChatPane({
   const [isThinking, setIsThinking] = useState(false);
 
   // 使用 zustand store 管理模型配置
-  const { selectedModel, selectedProvider, selectedModelId, setModel } =
-    useModelStore();
+  const {
+    selectedModel,
+    selectedProvider,
+    selectedModelId,
+    autoToolCall,
+    enabledTools,
+    mcpConfigs,
+    setModel,
+  } = useModelStore();
+
+  // 监听配置变化
+  useEffect(() => {
+    console.log("💡 ChatPane: config changed:", {
+      autoToolCall,
+      enabledTools,
+      mcpConfigs,
+    });
+  }, [autoToolCall, enabledTools, mcpConfigs]);
 
   const { data: threads } = useGetThreads();
   const { data: messages, isLoading: isLoadingHistory } =
@@ -41,12 +57,15 @@ export default function ChatPane({
     useStreamedMessages(threadId, {
       provider: selectedProvider || undefined,
       model: selectedModelId,
+      autoToolCall,
+      enabledTools,
+      mcpConfigs: mcpConfigs || undefined,
     });
 
   // 处理 interrupt 响应
   const handleInterruptRespond = async (
     interruptId: string,
-    response: string
+    response: string,
   ) => {
     // 将响应映射为 allowTool 参数
     const allowTool = response === "approve" ? "allow" : "deny";
@@ -81,7 +100,7 @@ export default function ChatPane({
   // 处理发送消息的逻辑
   const handleSendMessage = async (
     message: string,
-    files?: AttachmentFile[]
+    files?: AttachmentFile[],
   ) => {
     const isNotEmpty = message.trim().length > 0 || (files && files.length > 0);
 
@@ -89,10 +108,12 @@ export default function ChatPane({
       setIsThinking(true);
     }
 
-    // 合并模型配置
+    // 合并模型配置和工具选择
+    const { enabledTools } = useModelStore.getState();
     const finalOpts: MessageOptions = {
       provider: selectedProvider || undefined,
       model: selectedModelId || undefined,
+      enabledTools: enabledTools, // 传递启用的工具列表
       ...(files && files.length > 0 && { files }),
     };
 
@@ -114,7 +135,7 @@ export default function ChatPane({
   const handleModelChange = (
     modelName: string,
     provider: string | null,
-    modelId?: string
+    modelId?: string,
   ) => {
     setModel(modelName, provider, modelId);
   };

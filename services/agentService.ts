@@ -10,6 +10,11 @@ import { ensureAgent } from "@/lib/agent";
 import prisma from "@/lib/database/pirsma";
 import { getHistory, postgresCheckpointer } from "@/lib/agent/memory";
 import { Command } from "@langchain/langgraph";
+import {
+  ExternalServiceError,
+  FileUploadError,
+  ValidationError,
+} from "@/lib/errors";
 
 /**
  * 清理线程中未完成的工具调用
@@ -59,13 +64,17 @@ async function cleanupIncompleteToolCalls(threadId: string) {
 
 /**
  * 将 URL 转换为 data URL (base64)
+ * @throws {ExternalServiceError} 当文件获取失败时
  */
-async function convertUrlToDataUrl(url: string): Promise<string | null> {
+async function convertUrlToDataUrl(url: string): Promise<string> {
   try {
     const response = await fetch(url);
     if (!response.ok) {
-      console.error(`Failed to fetch file from URL: ${response.status}`);
-      return null;
+      throw new ExternalServiceError(
+        `Failed to fetch file: ${response.statusText}`,
+        "File Storage",
+        response.status === 404 ? 502 : 503,
+      );
     }
 
     const blob = await response.blob();
@@ -76,18 +85,27 @@ async function convertUrlToDataUrl(url: string): Promise<string | null> {
 
     return `data:${mimeType};base64,${base64}`;
   } catch (error) {
-    console.error("Error converting URL to data URL:", error);
-    return null;
+    if (error instanceof ExternalServiceError) {
+      throw error;
+    }
+    throw new ExternalServiceError(
+      "Failed to convert URL to data URL",
+      "File Storage",
+      502,
+      error,
+    );
   }
 }
 
 /**
  * 创建支持多模态的HumanMessage
  * 按照 LangChain 官方规范处理多模态内容
+ * @throws {ValidationError} 当文件格式无效时
+ * @throws {FileUploadError} 当文件处理失败时
  */
 async function createHumanMessage(
   text: string,
-  files?: AttachmentFile[]
+  files?: AttachmentFile[],
 ): Promise<HumanMessage> {
   if (!files || files.length === 0) {
     return new HumanMessage(text);
@@ -189,14 +207,16 @@ async function createHumanMessage(
         });
       } else if (file.source_type === "url" && file.url) {
         // 视频文件通常需要 base64 格式，尝试转换
-        const dataUrl = await convertUrlToDataUrl(file.url);
-        if (dataUrl) {
+        try {
+          const dataUrl = await convertUrlToDataUrl(file.url);
           content.push({
             type: "video",
             source_type: "base64",
             data: dataUrl,
           });
-        } else {
+        } catch (error) {
+          // 转换失败，添加文本说明
+          console.warn(`Failed to convert video URL for ${file.name}:`, error);
           content.push({
             type: "text",
             text: `视频文件：${file.name}，下载链接：${file.url}`,
@@ -254,14 +274,15 @@ function getFileTypeLabel(fileType: string): string {
  */
 export async function streamResponse(params: {
   threadId: string;
+  userId: string;
   userText: string;
   opts?: MessageOptions;
 }) {
-  const { threadId, userText, opts } = params;
+  const { threadId, userId, userText, opts } = params;
 
   // 确保线程在数据库中存在，并初始化必要的元数据/状态。
   // 这样可以让 agent 将流式响应与持久化的线程关联起来。
-  await ensureThread(threadId, userText);
+  await ensureThread(threadId, userId, userText);
 
   // 检查并清理未完成的工具调用
   if (!opts?.allowTool) {
@@ -294,9 +315,17 @@ export async function streamResponse(params: {
   // 配置参数直接使用，不需要从数据库恢复（前端会在每次请求时传递）
   const provider = opts?.provider;
   const model = opts?.model;
-  const mcpUrl = opts?.mcpUrl;
+  const mcpConfigs = opts?.mcpConfigs;
+  const autoToolCall = opts?.autoToolCall;
+  const enabledTools = opts?.enabledTools;
 
-  console.log("🔧 Creating agent with config:", { provider, model, mcpUrl });
+  console.log("🔧 Creating agent with config:", {
+    provider,
+    model,
+    mcpConfigs: mcpConfigs ? `${mcpConfigs.length} configs` : undefined,
+    autoToolCall,
+    enabledTools: enabledTools ? `${enabledTools.length} tools` : undefined,
+  });
 
   // 创建或获取一个按所选 provider/model/tools 配置的 agent 实例。
   // `ensureAgent` 会构建一个 AgentBuilder，并将工具绑定到 LLM 上。
@@ -304,8 +333,9 @@ export async function streamResponse(params: {
     provider: provider,
     model: model,
     tools: opts?.tools,
-    approveAllTools: opts?.approveAllTools,
-    mcpUrl: mcpUrl,
+    autoToolCall: autoToolCall,
+    mcpConfigs: mcpConfigs,
+    enabledTools: enabledTools,
   });
 
   // Type assertion needed for Command union with state update in v1
@@ -315,15 +345,23 @@ export async function streamResponse(params: {
     // 保存完整配置到 checkpoint，以便恢复时使用
     ...(provider && { provider }),
     ...(model && { model }),
-    ...(mcpUrl && { mcpUrl }),
+    ...(mcpConfigs && mcpConfigs.length > 0 && { mcpConfigs }),
   };
   let iterable: any;
 
   try {
+    console.log("⏱️  [TIMING] Starting agent.stream() call...");
+    const streamStartTime = Date.now();
+
     iterable = await agent.stream(inputs as any, {
-      streamMode: ["updates"],
+      streamMode: ["updates", "messages"],
       configurable,
     });
+
+    const streamInitTime = Date.now() - streamStartTime;
+    console.log(
+      `⏱️  [TIMING] agent.stream() returned iterable in ${streamInitTime}ms`,
+    );
   } catch (error: any) {
     // 如果是工具调用相关错误，使用新的线程ID重试
     if (
@@ -333,113 +371,168 @@ export async function streamResponse(params: {
       console.log("Tool call error detected, retrying with new thread...");
       const newThreadId = `${threadId}_${Date.now()}`;
       configurable = { thread_id: newThreadId };
+
+      console.log("⏱️  [TIMING] Retrying agent.stream() call...");
+      const retryStartTime = Date.now();
+
       iterable = await agent.stream(inputs as any, {
-        streamMode: ["updates"],
+        streamMode: ["updates", "messages"],
         configurable,
       });
+
+      const retryTime = Date.now() - retryStartTime;
+      console.log(
+        `⏱️  [TIMING] Retry agent.stream() returned in ${retryTime}ms`,
+      );
     } else {
       throw error;
     }
   }
 
   // 该生成器遍历 LangGraph agent 返回的可迭代流（iterable），并将内部的 chunk
-  // 元组转换为项目所需的 `MessageResponse` 结构。
+  // 转换为项目所需的 `MessageResponse` 结构。
+  // 使用 ["updates", "messages"] 组合模式：updates 用于 interrupt 检测，messages 用于流式展示
   async function* generator(): AsyncGenerator<MessageResponse, void, unknown> {
     console.log("🔄 Starting generator, allowTool:", opts?.allowTool);
+    console.log(
+      "⏱️  [TIMING] Entering for-await loop, waiting for first chunk...",
+    );
+
+    const generatorStartTime = Date.now();
+    let firstChunkTime: number | null = null;
+    let chunkCount = 0;
+
     for await (const chunk of iterable) {
-      if (!chunk) continue;
-      // 调试信息：打印原始 chunk 负载，便于排查流式行为
-      console.log("🚀 ~ generator ~ chunk:", chunk);
+      chunkCount++;
 
-      // LangGraph 返回的 chunk 通常为二元元组形式：[type, data]
-      if (!Array.isArray(chunk) || chunk.length !== 2) continue;
-      const [chunkType, chunkData] = chunk;
-
-      // 仅处理类型为 "updates" 的 chunk，忽略其他类型（如 "final" 等）
-      if (
-        chunkType !== "updates" ||
-        !chunkData ||
-        typeof chunkData !== "object"
-      )
-        continue;
-
-      // 1) 处理中断（interrupt）负载（工具审批请求）。当状态机暂停等待人工确认时，
-      //    LangGraph 会发出 `__interrupt__` 条目。这里把它转换为标准的 interrupt 类型消息，
-      //    以便前端展示审批 UI。
-      if (
-        "__interrupt__" in chunkData &&
-        Array.isArray((chunkData as any).__interrupt__)
-      ) {
-        console.log("🔔 ===== INTERRUPT DETECTED =====");
-        const interrupts = (chunkData as any).__interrupt__ as Array<
-          Record<string, any>
-        >;
-
-        for (const intr of interrupts) {
-          const interruptValue = intr?.value;
-          console.log(
-            "🔔 Interrupt value:",
-            JSON.stringify(interruptValue, null, 2)
-          );
-
-          if (interruptValue) {
-            /**
-             * 前端中断审批示例文案（参考）：
-             *
-             * - 标题："工具调用需审批"
-             * - 描述："助手将要调用工具 '<toolName>'，参数如下。请审核并选择继续或拒绝。"
-             * - 展示的 payload：
-             *   {
-             *     id: toolCallId,
-             *     type: "choice",
-             *     question: "...",
-             *     options: [...]
-             *   }
-             * - 操作：
-             *   [批准] -> 向后端发送 resume，请求参数 `allowTool='allow'`
-             *   [拒绝] -> 向后端发送 resume，请求参数 `allowTool='deny'`
-             *
-             * 客户端使用 SSE 恢复调用示例：
-             *   createMessageStream(threadId, "", { allowTool: 'allow' })
-             */
-            yield {
-              type: "interrupt",
-              data: {
-                id:
-                  interruptValue.metadata?.toolCallId || Date.now().toString(),
-                type: interruptValue.type || "choice",
-                question: interruptValue.question || "需要您的确认",
-                options: interruptValue.options || [],
-                context: interruptValue.context,
-                currentValue: interruptValue.currentValue,
-                metadata: interruptValue.metadata || {},
-              },
-            };
-
-            console.log("🔔 Interrupt message yielded, stopping stream");
-            // interrupt 后停止流，等待用户响应
-            break;
-          }
-        }
-        // 如果检测到 interrupt，跳过后续的消息处理，等待下一个 chunk
-        continue;
+      // 记录第一个 chunk 到达时间
+      if (firstChunkTime === null) {
+        firstChunkTime = Date.now() - generatorStartTime;
+        console.log(
+          `⏱️  [TIMING] 🎉 First chunk received after ${firstChunkTime}ms`,
+        );
       }
 
-      // 2) 处理 approval 节点的消息（ToolMessage，用于拒绝反馈）
-      if (
-        "approval" in (chunkData as any) &&
-        (chunkData as any).approval &&
-        typeof (chunkData as any).approval === "object" &&
-        "messages" in (chunkData as any).approval
-      ) {
-        const messages = Array.isArray((chunkData as any).approval.messages)
-          ? (chunkData as any).approval.messages
-          : [(chunkData as any).approval.messages];
+      if (!chunk) continue;
+
+      // 组合模式返回元组：[streamMode, data]
+      if (!Array.isArray(chunk) || chunk.length !== 2) continue;
+      const [streamMode, data] = chunk;
+
+      // ============ 处理 "messages" 模式 - 流式 AI 消息增量 ============
+      if (streamMode === "messages") {
+        // messages 模式返回单个消息或消息数组的增量
+        const messages = Array.isArray(data) ? data : [data];
 
         for (const message of messages) {
           if (!message) continue;
 
-          // 处理 approval 节点返回的 ToolMessage（拒绝时）
+          // 检查是否是 AI 消息增量
+          const isAIMessage =
+            message?.constructor?.name === "AIMessageChunk" ||
+            message?.constructor?.name === "AIMessage";
+
+          if (!isAIMessage) continue;
+
+          // 关键：跳过包含 tool_calls 的消息（工具调用由 updates 模式处理）
+          // 只处理纯文本流式消息
+          const hasToolCall =
+            (Array.isArray(message.content) &&
+              message.content.some(
+                (item: unknown) =>
+                  item && typeof item === "object" && "functionCall" in item,
+              )) ||
+            ("tool_calls" in message &&
+              Array.isArray(message.tool_calls) &&
+              message.tool_calls.length > 0);
+
+          // 如果这是工具调用消息，跳过（updates 模式会处理）
+          if (hasToolCall) {
+            continue;
+          }
+
+          // 只处理纯文本消息
+          const processedMessage = processAIMessage(
+            message as Record<string, unknown>,
+          );
+          if (processedMessage) {
+            yield processedMessage;
+          }
+        }
+        continue; // 处理完 messages 模式，继续下一个 chunk
+      }
+
+      // ============ 处理 "updates" 模式 - 状态更新和 interrupt ============
+      if (streamMode !== "updates" || !data || typeof data !== "object") {
+        continue;
+      }
+
+      // 1) 处理中断（interrupt）负载
+      if (
+        "__interrupt__" in data &&
+        Array.isArray((data as any).__interrupt__)
+      ) {
+        console.log("🔔 ===== INTERRUPT DETECTED =====");
+        const interrupts = (data as any).__interrupt__ as Array<
+          Record<string, any>
+        >;
+
+        const firstInterrupt = interrupts[0];
+        if (firstInterrupt?.value) {
+          const interruptValue = firstInterrupt.value;
+
+          /**
+           * 前端中断审批示例文案（参考）：
+           *
+           * - 标题："工具调用需审批"
+           * - 描述："助手将要调用工具 '<toolName>'，参数如下。请审核并选择继续或拒绝。"
+           * - 展示的 payload：
+           *   {
+           *     id: toolCallId,
+           *     type: "choice",
+           *     question: "...",
+           *     options: [...]
+           *   }
+           * - 操作：
+           *   [批准] -> 向后端发送 resume，请求参数 `allowTool='allow'`
+           *   [拒绝] -> 向后端发送 resume，请求参数 `allowTool='deny'`
+           *
+           * 客户端使用 SSE 恢复调用示例：
+           *   createMessageStream(threadId, "", { allowTool: 'allow' })
+           */
+          yield {
+            type: "interrupt",
+            data: {
+              id: interruptValue.metadata?.toolCallId || Date.now().toString(),
+              type: interruptValue.type || "choice",
+              question: interruptValue.question || "需要您的确认",
+              options: interruptValue.options || [],
+              context: interruptValue.context,
+              currentValue: interruptValue.currentValue,
+              metadata: interruptValue.metadata || {},
+            },
+          };
+
+          console.log("🔔 Interrupt message yielded, stopping stream");
+        }
+        // interrupt 后停止流，等待用户响应
+        return;
+      }
+
+      // 2) 处理 approval 节点的消息（ToolMessage，用于拒绝反馈）
+      if (
+        "approval" in data &&
+        (data as any).approval &&
+        typeof (data as any).approval === "object" &&
+        "messages" in (data as any).approval
+      ) {
+        const messages = Array.isArray((data as any).approval.messages)
+          ? (data as any).approval.messages
+          : [(data as any).approval.messages];
+
+        for (const message of messages) {
+          if (!message) continue;
+
           const isToolMessage = message?.constructor?.name === "ToolMessage";
           if (isToolMessage) {
             const content =
@@ -461,10 +554,9 @@ export async function streamResponse(params: {
         }
       }
 
-      // 3) 处理常规的 agent 更新消息（包含 AI 消息块）。
-      // 注意：节点名称可能是 "agent" 或 "chatbot"，取决于图的构建方式
-      const agentNodeData =
-        (chunkData as any).agent || (chunkData as any).chatbot;
+      // 3) 处理工具调用（从 updates 模式中提取，用于展示工具调用卡片）
+      // 注意：普通 AI 文本消息已由 messages 模式流式处理，这里只处理工具调用信息
+      const agentNodeData = (data as any).agent || (data as any).chatbot;
       if (
         agentNodeData &&
         typeof agentNodeData === "object" &&
@@ -477,45 +569,73 @@ export async function streamResponse(params: {
         for (const message of messages) {
           if (!message) continue;
 
-          // 仅处理实际的 AI 消息（可能是分块的 AIMessageChunk 或最终的 AIMessage 实例）
-          const isAIMessage =
-            message?.constructor?.name === "AIMessageChunk" ||
-            message?.constructor?.name === "AIMessage";
+          // 只处理带有 tool_calls 的消息（工具调用卡片）
+          const hasToolCall =
+            (Array.isArray(message.content) &&
+              message.content.some(
+                (item: unknown) =>
+                  item && typeof item === "object" && "functionCall" in item,
+              )) ||
+            ("tool_calls" in message &&
+              Array.isArray(message.tool_calls) &&
+              message.tool_calls.length > 0);
 
-          if (!isAIMessage) continue;
+          // 关键：只有当消息包含 tool_calls 时才处理
+          // 这避免了 updates 模式重复发送普通文本消息
+          if (hasToolCall) {
+            console.log("🔧 Processing tool call message:", {
+              hasContent: !!message.content,
+              contentType: Array.isArray(message.content)
+                ? "array"
+                : typeof message.content,
+              hasToolCalls: "tool_calls" in message,
+            });
 
-          const processedMessage = processAIMessage(
-            message as Record<string, unknown>
-          );
-          if (processedMessage) {
-            yield processedMessage;
+            const processedMessage = processAIMessage(
+              message as Record<string, unknown>,
+            );
+
+            console.log("🔧 Processed message result:", {
+              hasResult: !!processedMessage,
+              type: processedMessage?.type,
+              contentType:
+                processedMessage && "content" in processedMessage.data
+                  ? Array.isArray(processedMessage.data.content)
+                    ? "array"
+                    : typeof processedMessage.data.content
+                  : null,
+              hasToolCalls:
+                processedMessage?.type === "ai" &&
+                "tool_calls" in processedMessage.data,
+            });
+
+            // 再次确认返回的消息确实包含 tool_calls
+            if (
+              processedMessage &&
+              processedMessage.type === "ai" &&
+              "tool_calls" in processedMessage.data &&
+              processedMessage.data.tool_calls
+            ) {
+              console.log("✅ Yielding tool call message");
+              yield processedMessage;
+            }
           }
         }
       }
 
       // 4) 处理工具节点的消息（ToolMessage，工具执行结果）
       if (
-        "tools" in (chunkData as any) &&
-        (chunkData as any).tools &&
-        typeof (chunkData as any).tools === "object" &&
-        "messages" in (chunkData as any).tools
+        "tools" in data &&
+        (data as any).tools &&
+        typeof (data as any).tools === "object" &&
+        "messages" in (data as any).tools
       ) {
-        const messages = Array.isArray((chunkData as any).tools.messages)
-          ? (chunkData as any).tools.messages
-          : [(chunkData as any).tools.messages];
-
-        console.log("🔧 Tool messages received:", messages.length);
+        const messages = Array.isArray((data as any).tools.messages)
+          ? (data as any).tools.messages
+          : [(data as any).tools.messages];
 
         for (const message of messages) {
           if (!message) continue;
-
-          // 打印工具消息详情
-          console.log("🔧 Tool message details:", {
-            type: message?.constructor?.name,
-            content: message?.content,
-            tool_call_id: (message as any)?.tool_call_id,
-            name: (message as any)?.name,
-          });
 
           // 处理工具消息
           const isToolMessage = message?.constructor?.name === "ToolMessage";
@@ -539,13 +659,19 @@ export async function streamResponse(params: {
         }
       }
     }
+
+    // 流结束时的统计
+    const totalTime = Date.now() - generatorStartTime;
+    console.log(
+      `⏱️  [TIMING] Stream completed - Total chunks: ${chunkCount}, Total time: ${totalTime}ms, First chunk: ${firstChunkTime}ms`,
+    );
   }
   return generator();
 }
 
 // 辅助函数：处理任意 AI 消息并返回适当的 MessageResponse
 function processAIMessage(
-  message: Record<string, unknown>
+  message: Record<string, unknown>,
 ): MessageResponse | null {
   // 判断该 AI 消息是否为工具/函数调用。
   // LangGraph/或 LLM 的工具调用可能以结构化 content 表示（例如数组中包含 `functionCall` 字段），
@@ -555,7 +681,7 @@ function processAIMessage(
     (Array.isArray(message.content) &&
       message.content.some(
         (item: unknown) =>
-          item && typeof item === "object" && "functionCall" in item
+          item && typeof item === "object" && "functionCall" in item,
       )) ||
     // Or the tooling layer may attach a `tool_calls` field directly
     ("tool_calls" in message && Array.isArray((message as any).tool_calls));
@@ -564,14 +690,23 @@ function processAIMessage(
     // 工具调用：返回更丰富的 AIMessageData 结构，以便前端渲染工具调用详情并在需要时展示审批 UI。
     // 返回字段说明：
     // - id：回复/消息的稳定 id
-    // - content：若存在则为文本内容（可能为空）
+    // - content：可能是字符串或包含 functionCall 的数组
     // - tool_calls：工具调用描述数组（包含 name、id、args 等）
     // - additional_kwargs / response_metadata：模型可能携带的额外元数据
+
+    // 保留原始 content，无论是字符串还是数组（包含 functionCall）
+    let content: string | any[] = "";
+    if (typeof message.content === "string") {
+      content = message.content;
+    } else if (Array.isArray(message.content)) {
+      content = message.content;
+    }
+
     return {
       type: "ai",
       data: {
         id: (message.id as string) || Date.now().toString(),
-        content: typeof message.content === "string" ? message.content : "",
+        content: content,
         tool_calls: (message.tool_calls as ToolCall[]) || undefined,
         additional_kwargs:
           (message.additional_kwargs as Record<string, unknown>) || undefined,
@@ -589,7 +724,7 @@ function processAIMessage(
   } else if (Array.isArray(message.content)) {
     text = message.content
       .map((c: string | { text?: string }) =>
-        typeof c === "string" ? c : c?.text || ""
+        typeof c === "string" ? c : c?.text || "",
       )
       .join("");
   } else {
@@ -613,13 +748,12 @@ function processAIMessage(
 }
 
 export async function fetchThreadHistory(
-  threadId: string
+  threadId: string,
 ): Promise<MessageResponse[]> {
   const thread = await prisma.thread.findUnique({ where: { id: threadId } });
   if (!thread) return [];
   try {
     const history = await getHistory(threadId);
-    console.log("🚀 ~ fetchThreadHistory ~ history:", history);
     return history.map((msg: BaseMessage) => msg.toDict() as MessageResponse);
   } catch (e) {
     console.error("fetchThreadHistory error", e);

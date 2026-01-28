@@ -10,7 +10,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useStreamedMessages(
   threadId?: string,
-  currentConfig?: { provider?: string; model?: string }
+  currentConfig?: {
+    provider?: string;
+    model?: string;
+    autoToolCall?: boolean;
+    enabledTools?: string[];
+    mcpConfigs?: Array<{
+      id: string;
+      url: string;
+      headers?: Record<string, string>;
+    }>;
+  },
 ) {
   const queryClient = useQueryClient();
 
@@ -20,6 +30,11 @@ export function useStreamedMessages(
   const [isSending, setIsSending] = useState(false);
   const [isReceiving, setIsReceiving] = useState(false);
   const [sendError, setSendError] = useState<Error | null>(null);
+
+  // 监听配置变化
+  useEffect(() => {
+    console.log("📡 useStreamedMessages: config changed:", currentConfig);
+  }, [currentConfig]);
 
   const cleanupStream = useCallback(() => {
     try {
@@ -67,7 +82,7 @@ export function useStreamedMessages(
             console.log(
               "📨 Received message:",
               messageResponse.type,
-              messageResponse
+              messageResponse,
             );
 
             const data: any = messageResponse.data;
@@ -79,7 +94,7 @@ export function useStreamedMessages(
             if (messageResponse.type === "interrupt") {
               queryClient.setQueryData(
                 ["messages", tid],
-                (old: MessageResponse[] = []) => [...old, messageResponse]
+                (old: MessageResponse[] = []) => [...old, messageResponse],
               );
               return;
             }
@@ -88,7 +103,7 @@ export function useStreamedMessages(
             if (messageResponse.type === "tool") {
               queryClient.setQueryData(
                 ["messages", tid],
-                (old: MessageResponse[] = []) => [...old, messageResponse]
+                (old: MessageResponse[] = []) => [...old, messageResponse],
               );
               return;
             }
@@ -96,32 +111,61 @@ export function useStreamedMessages(
             // AI 消息带有 tool_calls 且无文本内容，表示工具调用请求
             // 这种情况下，我们需要更新现有消息或新增
             const hasToolCalls = data.tool_calls && data.tool_calls.length > 0;
-            const hasContent = data.content && data.content.trim();
+            const hasContentArray =
+              Array.isArray(data.content) && data.content.length > 0;
+            const hasContentString =
+              typeof data.content === "string" && data.content.trim();
+
+            console.log("📨 Processing AI message:", {
+              id: data.id,
+              hasToolCalls,
+              hasContentArray,
+              hasContentString,
+              contentType: Array.isArray(data.content)
+                ? "array"
+                : typeof data.content,
+              isNewMessage:
+                !currentMessageRef.current ||
+                currentMessageRef.current.data.id !== data.id,
+            });
 
             if (
               !currentMessageRef.current ||
               currentMessageRef.current.data.id !== data.id
             ) {
               // 新消息
+              console.log("➕ Adding new AI message to state");
               currentMessageRef.current = messageResponse;
               queryClient.setQueryData(
                 ["messages", tid],
                 (old: MessageResponse[] = []) => [
                   ...old,
                   currentMessageRef.current!,
-                ]
+                ],
               );
             } else {
               // 累积现有消息
+              console.log("🔄 Updating existing AI message");
               const currentData: any = currentMessageRef.current.data;
 
               // 文本内容累积
               let newContent = currentData.content || "";
-              if (typeof data.content === "string" && data.content) {
-                newContent =
-                  typeof currentData.content === "string"
-                    ? currentData.content + data.content
-                    : data.content;
+              if (data.content) {
+                // 如果新内容是字符串，累积到现有内容
+                if (typeof data.content === "string") {
+                  newContent =
+                    typeof currentData.content === "string"
+                      ? currentData.content + data.content
+                      : data.content;
+                }
+                // 如果新内容是数组（如 functionCall），直接替换
+                else if (Array.isArray(data.content)) {
+                  console.log(
+                    "🔧 Received array content (functionCall):",
+                    data.content,
+                  );
+                  newContent = data.content;
+                }
               }
 
               // 工具调用：直接替换（后端会发送完整的 tool_calls）
@@ -144,17 +188,25 @@ export function useStreamedMessages(
                 },
               };
 
+              console.log("💾 Updated message:", {
+                id: currentMessageRef.current.data.id,
+                contentType: Array.isArray(newContent)
+                  ? "array"
+                  : typeof newContent,
+                hasToolCalls: !!newToolCalls,
+              });
+
               queryClient.setQueryData(
                 ["messages", tid],
                 (old: MessageResponse[] = []) => {
                   const idx = old.findIndex(
-                    (m) => m.data?.id === currentMessageRef.current!.data.id
+                    (m) => m.data?.id === currentMessageRef.current!.data.id,
                   );
                   if (idx === -1) return old;
                   const clone = [...old];
                   clone[idx] = currentMessageRef.current!;
                   return clone;
-                }
+                },
               );
             }
           } catch {
@@ -198,7 +250,7 @@ export function useStreamedMessages(
 
             queryClient.setQueryData(
               ["messages", tid],
-              (old: MessageResponse[] = []) => [...old, errorMsg]
+              (old: MessageResponse[] = []) => [...old, errorMsg],
             );
           } finally {
             setIsSending(false);
@@ -223,7 +275,7 @@ export function useStreamedMessages(
         }
       }
     },
-    [queryClient]
+    [queryClient],
   );
 
   const sendMessage = useCallback(
@@ -231,23 +283,6 @@ export function useStreamedMessages(
       if (!threadId) return;
 
       const tempId = `temp-${Date.now()}`;
-
-      // 获取选中的 MCP 配置
-      let mcpUrl: string | undefined = undefined;
-      try {
-        const selectedMcpId = localStorage.getItem("selectedMcpId");
-        if (selectedMcpId) {
-          // 从 API 获取配置详情
-          const response = await fetch(`/api/mcp/configs/${selectedMcpId}`);
-          if (response.ok) {
-            const data = await response.json();
-            mcpUrl = data.config?.url;
-            console.log("🔧 Using MCP URL:", mcpUrl);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to load MCP config:", error);
-      }
 
       // 构建多模态内容
       let content: string | MultiModalContent[] = text;
@@ -280,15 +315,29 @@ export function useStreamedMessages(
       };
       queryClient.setQueryData(
         ["messages", threadId],
-        (old: MessageResponse[] = []) => [...old, userMessage]
+        (old: MessageResponse[] = []) => [...old, userMessage],
       );
 
-      // 合并文件选项
+      // 合并文件选项、autoToolCall、enabledTools 和 mcpConfigs 配置
       const messageOptions: MessageOptions = {
         ...opts,
         ...(files && files.length > 0 && { files }),
-        ...(mcpUrl && { mcpUrl }),
+        ...(currentConfig?.mcpConfigs &&
+          currentConfig.mcpConfigs.length > 0 && {
+            mcpConfigs: currentConfig.mcpConfigs,
+          }),
+        ...(currentConfig?.autoToolCall !== undefined && {
+          autoToolCall: currentConfig.autoToolCall,
+        }),
+        ...(currentConfig?.enabledTools &&
+          currentConfig.enabledTools.length > 0 && {
+            enabledTools: currentConfig.enabledTools,
+          }),
       };
+
+      console.log("📤 Sending message with options:", messageOptions);
+      console.log("🔧 Enabled tools:", messageOptions.enabledTools);
+      console.log("🔗 MCP configs:", messageOptions.mcpConfigs || "(not set)");
 
       await handleStreamResponse({
         threadId,
@@ -296,7 +345,7 @@ export function useStreamedMessages(
         opts: messageOptions,
       });
     },
-    [threadId, queryClient, handleStreamResponse]
+    [threadId, queryClient, handleStreamResponse, currentConfig],
   );
 
   useEffect(() => {
@@ -316,30 +365,11 @@ export function useStreamedMessages(
 
       console.log("🔄 Resuming execution with:", { threadId, allowTool });
 
-      // 获取当前的配置（provider、model、mcpUrl）
-      let mcpUrl: string | undefined = undefined;
-      try {
-        const selectedMcpId = localStorage.getItem("selectedMcpId");
-        if (selectedMcpId) {
-          const response = await fetch(`/api/mcp/configs/${selectedMcpId}`);
-          if (response.ok) {
-            const data = await response.json();
-            mcpUrl = data.config?.url;
-            console.log("🔧 Resume with MCP URL:", mcpUrl);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to load MCP config:", error);
-      }
-
-      // TODO: 从 UI context 中获取当前选择的 provider 和 model
-      // 暂时先不传，如果需要可以添加
-
       // 先移除 interrupt 消息，避免重复显示
       queryClient.setQueryData(
         ["messages", threadId],
         (old: MessageResponse[] = []) =>
-          old.filter((msg) => msg.type !== "interrupt")
+          old.filter((msg) => msg.type !== "interrupt"),
       );
 
       // 重置 currentMessageRef，确保新的 AI 响应能正确处理
@@ -351,13 +381,20 @@ export function useStreamedMessages(
         text: "", // 空字符串，因为这是恢复操作，不是新消息
         opts: {
           allowTool,
-          mcpUrl,
+          ...(currentConfig?.mcpConfigs &&
+            currentConfig.mcpConfigs.length > 0 && {
+              mcpConfigs: currentConfig.mcpConfigs,
+            }),
+          ...(currentConfig?.enabledTools &&
+            currentConfig.enabledTools.length > 0 && {
+              enabledTools: currentConfig.enabledTools,
+            }),
           provider: currentConfig?.provider,
           model: currentConfig?.model,
         },
       });
     },
-    [threadId, handleStreamResponse, queryClient]
+    [threadId, handleStreamResponse, queryClient, currentConfig],
   );
 
   return {

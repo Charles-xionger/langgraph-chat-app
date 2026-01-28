@@ -9,9 +9,16 @@ import {
   Video,
   Download,
   ExternalLink,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import {
   dracula,
@@ -169,15 +176,15 @@ export const MessageContent = ({ message }: MessageContentProps) => {
   const renderFileCard = (
     fileName: string,
     sizeKB: number,
-    fileType: string
+    fileType: string,
   ) => {
     const icon = getFileIcon(fileName);
     const typeLabel = getFileTypeLabel(fileName);
 
     return (
-      <div className="border-2 border-[#C78F56]/30 rounded-lg p-4 bg-gradient-to-br from-[#F2E6C2]/20 to-[#F2E6C2]/10 hover:from-[#F2E6C2]/30 hover:to-[#F2E6C2]/20 transition-colors">
+      <div className="border-2 border-[#C78F56]/30 rounded-lg p-4 bg-linear-to-br from-[#F2E6C2]/20 to-[#F2E6C2]/10 hover:from-[#F2E6C2]/30 hover:to-[#F2E6C2]/20 transition-colors">
         <div className="flex items-center space-x-3">
-          <div className="flex-shrink-0 p-2 rounded-lg bg-[#C78F56]/20 text-[#451806] dark:text-[#F2E6C2]">
+          <div className="shrink-0 p-2 rounded-lg bg-[#C78F56]/20 text-[#451806] dark:text-[#F2E6C2]">
             {icon}
           </div>
           <div className="flex-1 min-w-0">
@@ -281,6 +288,21 @@ export const MessageContent = ({ message }: MessageContentProps) => {
   const renderContent = () => {
     const messageData = message.data;
 
+    console.log("🎨 MessageContent rendering:", {
+      type: message.type,
+      hasContent: "content" in messageData,
+      contentType:
+        "content" in messageData
+          ? Array.isArray(messageData.content)
+            ? "array"
+            : typeof messageData.content
+          : null,
+      contentLength:
+        "content" in messageData && Array.isArray(messageData.content)
+          ? messageData.content.length
+          : null,
+    });
+
     // 处理interrupt类型消息
     if (message.type === "interrupt") {
       return (
@@ -294,6 +316,7 @@ export const MessageContent = ({ message }: MessageContentProps) => {
     const content = "content" in messageData ? messageData.content : null;
 
     if (!content) {
+      console.log("⚠️ No content in message:", messageData);
       return (
         <div className="text-gray-500 dark:text-gray-400">
           No content available
@@ -315,6 +338,17 @@ export const MessageContent = ({ message }: MessageContentProps) => {
 
     // 如果content是数组（多模态内容），分别处理每个元素
     if (Array.isArray(content)) {
+      console.log("📋 Rendering array content:", {
+        length: content.length,
+        items: content.map((item, i) => ({
+          index: i,
+          type:
+            typeof item === "object" && item && "type" in item
+              ? item.type
+              : typeof item,
+        })),
+      });
+
       return (
         <div className="space-y-3">
           {content.map((item, index) => {
@@ -343,7 +377,7 @@ export const MessageContent = ({ message }: MessageContentProps) => {
                       {renderFileCard(
                         fileInfo.fileName,
                         fileInfo.sizeKB,
-                        fileInfo.fileType
+                        fileInfo.fileType,
                       )}
                     </div>
                   );
@@ -379,6 +413,25 @@ export const MessageContent = ({ message }: MessageContentProps) => {
                       style={{ maxHeight: "400px" }}
                     />
                   </div>
+                );
+              }
+
+              // 处理函数调用内容
+              if (
+                (item as any).type === "functionCall" &&
+                "functionCall" in item &&
+                (item as any).functionCall
+              ) {
+                const funcCall = (item as any).functionCall;
+                const argsString = JSON.stringify(funcCall.args, null, 2);
+                const isLargeArgs = argsString.length > 100;
+
+                return (
+                  <FunctionCallCard
+                    key={index}
+                    funcCall={funcCall}
+                    isLargeArgs={isLargeArgs}
+                  />
                 );
               }
 
@@ -431,6 +484,64 @@ export const MessageContent = ({ message }: MessageContentProps) => {
     <div className="prose prose-sm max-w-none dark:prose-invert">
       {renderContent()}
     </div>
+  );
+};
+
+// 函数调用卡片组件（带折叠功能）
+interface FunctionCallCardProps {
+  funcCall: {
+    name: string;
+    args?: Record<string, any>;
+  };
+  isLargeArgs: boolean;
+}
+
+const FunctionCallCard = ({ funcCall, isLargeArgs }: FunctionCallCardProps) => {
+  const [isOpen, setIsOpen] = useState(!isLargeArgs);
+  const argsString = JSON.stringify(funcCall.args, null, 2);
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <div className="my-3 rounded-lg border-2 border-[#C78F56]/30 bg-[#F2E6C2]/20">
+        <div className="p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-medium text-[#451806] dark:text-[#F2E6C2]">
+              🔧 调用工具
+            </span>
+          </div>
+          <div className="text-sm space-y-1">
+            <div className="text-[#451806] dark:text-[#F2E6C2]">
+              <span className="font-medium">工具名称: </span>
+              <code className="px-1.5 py-0.5 rounded text-sm bg-[#C78F56]/20">
+                {funcCall.name}
+              </code>
+            </div>
+            {funcCall.args && Object.keys(funcCall.args).length > 0 && (
+              <div className="text-[#451806]/80 dark:text-[#F2E6C2]/80">
+                <CollapsibleTrigger asChild>
+                  <button className="flex items-center gap-1 font-medium hover:text-[#451806] dark:hover:text-white transition-colors">
+                    {isOpen ? (
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    )}
+                    <span>参数</span>
+                    {!isOpen && isLargeArgs && (
+                      <span className="text-[10px] opacity-60">(点击展开)</span>
+                    )}
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-1">
+                  <pre className="text-xs bg-[#C78F56]/10 p-2 rounded overflow-x-auto max-h-[300px] overflow-y-auto">
+                    {argsString}
+                  </pre>
+                </CollapsibleContent>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </Collapsible>
   );
 };
 

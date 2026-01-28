@@ -1,18 +1,68 @@
-export const maxDuration = 60;
+export const maxDuration = 120;
 export const dynamic = "force-dynamic";
 
 import { streamResponse } from "@/services/agentService";
 import { MessageResponse } from "@/types/message";
 import { NextRequest, NextResponse } from "next/server";
+import { ValidationError, formatStreamError } from "@/lib/errors";
+import { warmupMCPTools } from "@/lib/agent";
+import { auth } from "@/lib/auth";
+import prisma from "@/lib/database/pirsma";
+
+// 流式超时时间 (120秒) - 给复杂的工具调用链和 MCP 工具更多时间
+const STREAM_TIMEOUT = 120000; // 120000ms = 120s
 
 export async function GET(request: NextRequest) {
+  // 验证用户认证
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 },
+    );
+  }
+
+  // 提取 userId 以确保类型安全
+  const userId = session.user.id;
+
+  // 验证用户是否在数据库中存在
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      console.error(`User ${userId} not found in database`);
+      return NextResponse.json(
+        {
+          success: false,
+          error: "User not found. Please try logging in again.",
+        },
+        { status: 404 },
+      );
+    }
+  } catch (dbError) {
+    console.error("Database error checking user:", dbError);
+    return NextResponse.json(
+      { success: false, error: "Database error" },
+      { status: 500 },
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const threadId = searchParams.get("threadId");
   const userContent = searchParams.get("content");
   const provider = searchParams.get("provider");
   const model = searchParams.get("model");
   const allowTool = searchParams.get("allowTool") as "allow" | "deny" | null;
-  const mcpUrl = searchParams.get("mcpUrl");
+  const mcpConfigsParam = searchParams.get("mcpConfigs");
+  const mcpConfigs = mcpConfigsParam ? JSON.parse(mcpConfigsParam) : undefined;
+  const autoToolCall = searchParams.get("autoToolCall") === "true";
+  const enabledToolsParam = searchParams.get("enabledTools");
+  const enabledTools = enabledToolsParam
+    ? JSON.parse(enabledToolsParam)
+    : undefined;
 
   console.log("Stream GET request received:", {
     threadId,
@@ -20,14 +70,28 @@ export async function GET(request: NextRequest) {
     provider,
     model,
     allowTool,
-    mcpUrl,
+    mcpConfigs: mcpConfigs ? `${mcpConfigs.length} configs` : "none",
+    autoToolCall,
+    enabledTools: enabledTools
+      ? `${enabledTools.length} tools`
+      : "all tools (no filter)",
+    timeout: `${STREAM_TIMEOUT}ms (${STREAM_TIMEOUT / 1000}s)`,
   });
 
+  // 如果请求中包含 MCP 配置，异步预热（不阻塞当前请求）
+  if (mcpConfigs && mcpConfigs.length > 0) {
+    mcpConfigs.forEach((config: any) => {
+      warmupMCPTools(config);
+    });
+  }
+
+  // 参数验证
   if (!threadId || typeof userContent !== "string") {
-    return NextResponse.json(
-      { message: "Invalid request body." },
-      { status: 400 }
-    );
+    throw new ValidationError("Invalid request parameters", {
+      threadId: !threadId ? ["threadId is required"] : [],
+      content:
+        typeof userContent !== "string" ? ["content must be a string"] : [],
+    });
   }
 
   // 1. 定义编码器，用于将字符串转换为 Uint8Array
@@ -36,6 +100,16 @@ export async function GET(request: NextRequest) {
   // 用于中断流的控制器
   const abortController = new AbortController();
   let isAborted = false;
+
+  // 超时控制
+  const timeoutId = setTimeout(() => {
+    console.error(
+      `⏱️ ❌ Stream timeout after ${STREAM_TIMEOUT}ms (${STREAM_TIMEOUT / 1000}s)`,
+    );
+
+    isAborted = true;
+    abortController.abort();
+  }, STREAM_TIMEOUT);
 
   // 2. 创建一个可读流
   const stream = new ReadableStream<Uint8Array>({
@@ -46,7 +120,7 @@ export async function GET(request: NextRequest) {
         if (isAborted) return;
         try {
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
+            encoder.encode(`data: ${JSON.stringify(data)}\n\n`),
           );
         } catch {
           // 流已关闭，忽略
@@ -62,12 +136,15 @@ export async function GET(request: NextRequest) {
         try {
           const iterable = await streamResponse({
             threadId,
+            userId,
             userText: userContent,
             opts: {
               provider: provider || undefined,
               model: model || undefined,
               allowTool: allowTool || undefined,
-              mcpUrl: mcpUrl || undefined,
+              mcpConfigs: mcpConfigs || undefined,
+              autoToolCall,
+              enabledTools: enabledTools,
             },
           });
 
@@ -99,27 +176,23 @@ export async function GET(request: NextRequest) {
           if (!isAborted) {
             controller.enqueue(encoder.encode("event: error\n"));
             controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({
-                  message:
-                    error instanceof Error ? error.message : "Unknown error",
-                  threadId,
-                })}\n\n`
-              )
+              encoder.encode(`data: ${formatStreamError(error, threadId)}\n\n`),
             );
           }
         } finally {
+          // 清理超时控制器
+          clearTimeout(timeoutId);
           try {
             controller.close();
           } catch {
-            // 流已关闭，忽略
+            // Stream already closed
           }
         }
       })();
     },
 
-    // 当客户端断开连接时调用
     cancel() {
+      clearTimeout(timeoutId);
       isAborted = true;
       abortController.abort();
     },
@@ -138,6 +211,43 @@ export async function GET(request: NextRequest) {
 
 // POST 接口 - 支持文件上传的消息请求和恢复被 interrupt 暂停的执行
 export async function POST(request: NextRequest) {
+  // 验证用户认证
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 },
+    );
+  }
+
+  // 提取 userId 以确保类型安全
+  const userId = session.user.id;
+
+  // 验证用户是否在数据库中存在
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      console.error(`User ${userId} not found in database`);
+      return NextResponse.json(
+        {
+          success: false,
+          error: "User not found. Please try logging in again.",
+        },
+        { status: 404 },
+      );
+    }
+  } catch (dbError) {
+    console.error("Database error checking user:", dbError);
+    return NextResponse.json(
+      { success: false, error: "Database error" },
+      { status: 500 },
+    );
+  }
+
   const body = await request.json();
   const {
     threadId,
@@ -147,14 +257,16 @@ export async function POST(request: NextRequest) {
     allowTool,
     files,
     value,
-    mcpUrl,
+    mcpConfigs,
+    autoToolCall,
+    enabledTools,
   } = body;
 
+  // 参数验证
   if (!threadId) {
-    return NextResponse.json(
-      { message: "threadId is required" },
-      { status: 400 }
-    );
+    throw new ValidationError("threadId is required", {
+      threadId: ["threadId is required"],
+    });
   }
 
   // 如果是恢复请求（有 value 参数），使用原有逻辑
@@ -164,10 +276,9 @@ export async function POST(request: NextRequest) {
 
   // 新消息请求处理逻辑
   if (typeof content !== "string") {
-    return NextResponse.json(
-      { message: "Invalid request body." },
-      { status: 400 }
-    );
+    throw new ValidationError("Invalid request body", {
+      content: ["content must be a string"],
+    });
   }
 
   console.log("Stream POST request received:", {
@@ -177,12 +288,33 @@ export async function POST(request: NextRequest) {
     model,
     allowTool,
     files: files?.length || 0,
-    mcpUrl,
+    mcpConfigs: mcpConfigs ? `${mcpConfigs.length} configs` : "none",
+    autoToolCall,
+    enabledTools: enabledTools
+      ? `${enabledTools.length} tools`
+      : "all tools (no filter)",
+    timeout: `${STREAM_TIMEOUT}ms (${STREAM_TIMEOUT / 1000}s)`,
   });
 
   const encoder = new TextEncoder();
   const abortController = new AbortController();
   let isAborted = false;
+
+  // 超时控制
+  const timeoutId = setTimeout(() => {
+    console.error(
+      `⏱️ ❌ Stream timeout after ${STREAM_TIMEOUT}ms (${STREAM_TIMEOUT / 1000}s)`,
+    );
+    console.error("POST Request timeout - Details:", {
+      threadId,
+      provider,
+      model,
+      autoToolCall,
+      mcpConfigs,
+    });
+    isAborted = true;
+    abortController.abort();
+  }, STREAM_TIMEOUT);
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -190,7 +322,7 @@ export async function POST(request: NextRequest) {
         if (isAborted) return;
         try {
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
+            encoder.encode(`data: ${JSON.stringify(data)}\n\n`),
           );
         } catch {
           // 流已关闭，忽略
@@ -202,8 +334,17 @@ export async function POST(request: NextRequest) {
       try {
         const iterable = await streamResponse({
           threadId,
+          userId,
           userText: content,
-          opts: { provider, model, allowTool, files, mcpUrl },
+          opts: {
+            provider,
+            model,
+            allowTool,
+            files,
+            mcpConfigs,
+            autoToolCall,
+            enabledTools,
+          },
         });
 
         for await (const chunk of iterable) {
@@ -234,15 +375,11 @@ export async function POST(request: NextRequest) {
         if (!isAborted) {
           controller.enqueue(encoder.encode("event: error\n"));
           controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                message:
-                  error instanceof Error ? error.message : "Unknown error",
-              })}\n\n`
-            )
+            encoder.encode(`data: ${formatStreamError(error, threadId)}\n\n`),
           );
         }
       } finally {
+        clearTimeout(timeoutId);
         try {
           controller.close();
         } catch {
@@ -252,6 +389,7 @@ export async function POST(request: NextRequest) {
     },
 
     cancel() {
+      clearTimeout(timeoutId);
       isAborted = true;
       abortController.abort();
     },
@@ -280,7 +418,7 @@ async function handleInterruptResume(threadId: string, value: any) {
         if (isAborted) return;
         try {
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
+            encoder.encode(`data: ${JSON.stringify(data)}\n\n`),
           );
         } catch {
           // 流已关闭
@@ -297,10 +435,14 @@ async function handleInterruptResume(threadId: string, value: any) {
         const agent = await ensureAgent({});
 
         // 使用 Command 恢复执行
-        const iterable = await agent.stream(new Command({ resume: value }), {
-          streamMode: "messages",
-          configurable: { thread_id: threadId },
-        });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const iterable = await agent.stream(
+          new Command({ resume: value }) as any,
+          {
+            streamMode: "messages",
+            configurable: { thread_id: threadId },
+          },
+        );
 
         for await (const chunk of iterable) {
           if (isAborted || abortController.signal.aborted) {
@@ -364,8 +506,8 @@ async function handleInterruptResume(threadId: string, value: any) {
               `data: ${JSON.stringify({
                 message:
                   error instanceof Error ? error.message : "Unknown error",
-              })}\n\n`
-            )
+              })}\n\n`,
+            ),
           );
         }
       } finally {

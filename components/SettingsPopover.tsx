@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   User,
   Globe,
@@ -9,14 +9,23 @@ import {
   LogOut,
   ChevronRight,
   Wrench,
+  Zap,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { ReactNode } from "react";
 import { MCPConfigDialog } from "./mcp/MCPConfigDialog";
+import { useModelStore } from "@/stores/modelStore";
+import { signOut } from "next-auth/react";
 
 export default function SettingsPopover({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [mcpDialogOpen, setMcpDialogOpen] = useState(false);
+  const { autoToolCall, setAutoToolCall } = useModelStore();
+
+  // 监听状态变化
+  useEffect(() => {
+    console.log("⚙️ SettingsPopover: autoToolCall =", autoToolCall);
+  }, [autoToolCall]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -80,6 +89,43 @@ export default function SettingsPopover({ children }: { children: ReactNode }) {
               <ChevronRight className="h-4 w-4 ml-auto text-[--stardew-wood] dark:text-[--stardew-wood-light]" />
             </button>
 
+            <button
+              onClick={() => {
+                const newValue = !autoToolCall;
+                console.log("🔄 Toggling autoToolCall:", {
+                  from: autoToolCall,
+                  to: newValue,
+                });
+                setAutoToolCall(newValue);
+              }}
+              className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-[#C78F56]/20 dark:hover:bg-[#C78F56]/10 rounded transition-colors text-[--stardew-text] dark:text-[--stardew-parchment]"
+            >
+              <Zap
+                className={`h-4 w-4 ${
+                  autoToolCall
+                    ? "text-[--stardew-green]"
+                    : "text-[--stardew-wood]"
+                }`}
+              />
+              <span>
+                ⚡ Auto Tool Call{" "}
+                <span className="text-xs opacity-70">
+                  ({autoToolCall ? "ON" : "OFF"})
+                </span>
+              </span>
+              <div
+                className={`ml-auto w-8 h-4 rounded-full transition-colors ${
+                  autoToolCall ? "bg-[--stardew-green]" : "bg-gray-300"
+                }`}
+              >
+                <div
+                  className={`w-3 h-3 bg-white rounded-full transform transition-transform ${
+                    autoToolCall ? "translate-x-4" : "translate-x-0.5"
+                  } translate-y-0.5`}
+                />
+              </div>
+            </button>
+
             <button className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-[#C78F56]/20 dark:hover:bg-[#C78F56]/10 rounded transition-colors text-[--stardew-text] dark:text-[--stardew-parchment]">
               <HelpCircle className="h-4 w-4 text-[--stardew-purple]" />
               <span>❓ Get help</span>
@@ -98,7 +144,10 @@ export default function SettingsPopover({ children }: { children: ReactNode }) {
 
             <div className="border-t-2 border-[--stardew-wood-dark] dark:border-[#8B6F47] my-2"></div>
 
-            <button className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-red-500/10 rounded transition-colors text-red-600 dark:text-red-400">
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="flex items-center gap-3 w-full p-2 text-sm text-left hover:bg-red-500/10 rounded transition-colors text-red-600 dark:text-red-400"
+            >
               <LogOut className="h-4 w-4" />
               <span>🚪 Log out</span>
             </button>

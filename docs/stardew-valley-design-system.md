@@ -142,14 +142,18 @@
   .stardew-box {
     background-color: var(--stardew-parchment);
     border: 3px solid var(--stardew-wood-dark);
-    box-shadow: 0 4px 6px -1px rgba(69, 24, 6, 0.1), inset 0 2px 4px rgba(255, 250, 230, 0.6);
+    box-shadow:
+      0 4px 6px -1px rgba(69, 24, 6, 0.1),
+      inset 0 2px 4px rgba(255, 250, 230, 0.6);
     color: var(--stardew-text);
   }
 
   .dark .stardew-box {
     background-color: hsl(220, 20%, 18%);
     border-color: hsl(35, 40%, 30%);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), inset 0 2px 4px rgba(255, 250, 230, 0.05);
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.3),
+      inset 0 2px 4px rgba(255, 250, 230, 0.05);
     color: hsl(42, 60%, 90%);
   }
 }
@@ -207,7 +211,9 @@
   .stardew-btn {
     background: linear-gradient(to bottom, #7fc368 0%, #5dcc52 100%);
     border: 3px solid #4a9e3f;
-    box-shadow: 0 4px 0 #3d7f33, 0 6px 8px rgba(0, 0, 0, 0.15);
+    box-shadow:
+      0 4px 0 #3d7f33,
+      0 6px 8px rgba(0, 0, 0, 0.15);
     color: white;
     font-weight: 700;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -219,12 +225,16 @@
   .stardew-btn:hover:not(:disabled) {
     background: linear-gradient(to bottom, #8fd378 0%, #6ddc62 100%);
     transform: translateY(-2px);
-    box-shadow: 0 6px 0 #3d7f33, 0 8px 12px rgba(0, 0, 0, 0.2);
+    box-shadow:
+      0 6px 0 #3d7f33,
+      0 8px 12px rgba(0, 0, 0, 0.2);
   }
 
   .stardew-btn:active:not(:disabled) {
     transform: translateY(2px);
-    box-shadow: 0 2px 0 #3d7f33, 0 4px 6px rgba(0, 0, 0, 0.15);
+    box-shadow:
+      0 2px 0 #3d7f33,
+      0 4px 6px rgba(0, 0, 0, 0.15);
   }
 
   .dark .stardew-btn {
@@ -311,14 +321,18 @@ const pixelFont = Press_Start_2P({
   .stardew-box {
     background-color: var(--stardew-parchment);
     border: 3px solid var(--stardew-wood-dark);
-    box-shadow: 0 4px 6px -1px rgba(69, 24, 6, 0.1), inset 0 2px 4px rgba(255, 250, 230, 0.6);
+    box-shadow:
+      0 4px 6px -1px rgba(69, 24, 6, 0.1),
+      inset 0 2px 4px rgba(255, 250, 230, 0.6);
     color: var(--stardew-text);
   }
 
   .dark .stardew-box {
     background-color: hsl(220, 20%, 18%);
     border-color: hsl(35, 40%, 30%);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), inset 0 2px 4px rgba(255, 250, 230, 0.05);
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.3),
+      inset 0 2px 4px rgba(255, 250, 230, 0.05);
     color: hsl(42, 60%, 90%);
   }
 
@@ -343,7 +357,9 @@ const pixelFont = Press_Start_2P({
   .stardew-btn {
     background: linear-gradient(to bottom, #7fc368 0%, #5dcc52 100%);
     border: 3px solid #4a9e3f;
-    box-shadow: 0 4px 0 #3d7f33, 0 6px 8px rgba(0, 0, 0, 0.15);
+    box-shadow:
+      0 4px 0 #3d7f33,
+      0 6px 8px rgba(0, 0, 0, 0.15);
     color: white;
     font-weight: 700;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -355,12 +371,16 @@ const pixelFont = Press_Start_2P({
   .stardew-btn:hover:not(:disabled) {
     background: linear-gradient(to bottom, #8fd378 0%, #6ddc62 100%);
     transform: translateY(-2px);
-    box-shadow: 0 6px 0 #3d7f33, 0 8px 12px rgba(0, 0, 0, 0.2);
+    box-shadow:
+      0 6px 0 #3d7f33,
+      0 8px 12px rgba(0, 0, 0, 0.2);
   }
 
   .stardew-btn:active:not(:disabled) {
     transform: translateY(2px);
-    box-shadow: 0 2px 0 #3d7f33, 0 4px 6px rgba(0, 0, 0, 0.15);
+    box-shadow:
+      0 2px 0 #3d7f33,
+      0 4px 6px rgba(0, 0, 0, 0.15);
   }
 
   .stardew-btn:disabled {
@@ -724,7 +744,7 @@ export function EnergyBar({ current, max, label }: EnergyBarProps) {
       )}
       <div className="flex-1 h-3 bg-[#8B4513]/30 dark:bg-[#4a3728] rounded-full overflow-hidden border border-[--stardew-wood-dark] dark:border-[#8B6F47]">
         <div
-          className={`h-full bg-gradient-to-r ${getColor()} transition-all duration-500`}
+          className={`h-full bg-linear-to-r ${getColor()} transition-all duration-500`}
           style={{ width: `${percentage}%` }}
         />
       </div>

@@ -76,7 +76,7 @@ export const WeatherResultCard = ({ data }: WeatherResultCardProps) => {
   return (
     <div className="overflow-hidden stardew-box rounded-xl border-4 border-[#4FC3F7] dark:border-[#4FC3F7]/70">
       {/* 主要信息 */}
-      <div className="p-4 bg-gradient-to-br from-[#87CEEB]/20 to-[#4FC3F7]/20 dark:from-[#87CEEB]/10 dark:to-[#4FC3F7]/10">
+      <div className="p-4 bg-linear-to-br from-[#87CEEB]/20 to-[#4FC3F7]/20 dark:from-[#87CEEB]/10 dark:to-[#4FC3F7]/10">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-1.5 text-[--stardew-wood] dark:text-[--stardew-wood-light]">
