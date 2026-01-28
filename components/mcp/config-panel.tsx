@@ -403,11 +403,20 @@ export function MCPConfigPanel({
                       : ""
                   }
                   onChange={(e) => {
-                    const value = e.target.value.trim();
-                    setEditingConfig({
-                      ...editingConfig,
-                      headers: value ? value : undefined,
-                    });
+                    const value = e.target.value;
+                    try {
+                      const parsed = value.trim() ? JSON.parse(value) : null;
+                      setEditingConfig({
+                        ...editingConfig,
+                        headers: parsed,
+                      });
+                    } catch (error) {
+                      // Temporarily store the invalid JSON string to allow the user to fix it
+                      setEditingConfig({
+                        ...editingConfig,
+                        headers: value as any,
+                      });
+                    }
                   }}
                   className="w-full px-3 py-2 border-2 border-[--stardew-wood-light] rounded bg-white dark:bg-[--stardew-dark-bg] text-[#451806] dark:text-[--stardew-parchment] placeholder:text-[#A05030] placeholder:opacity-60 font-mono text-xs"
                   rows={4}
